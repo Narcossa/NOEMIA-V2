@@ -19,7 +19,7 @@ echo "› Utilisateur et dossiers"
 id noemia >/dev/null 2>&1 || useradd --system --home /var/lib/noemia --shell /usr/sbin/nologin noemia
 mkdir -p /var/lib/noemia /opt/noemia
 chown noemia:noemia /var/lib/noemia
-rsync -a --delete --exclude node_modules --exclude .env "$REPO_DIR/server/" /opt/noemia/server/
+rsync -a --delete --exclude node_modules --exclude .env --exclude data "$REPO_DIR/server/" /opt/noemia/server/
 cd /opt/noemia/server && npm ci --omit=dev --no-audit --no-fund
 
 if [ ! -f /opt/noemia/server/.env ]; then
@@ -31,10 +31,14 @@ chown root:noemia .env && chmod 640 .env
 
 echo "› Services"
 cp "$REPO_DIR/deploy/noemia.service" /etc/systemd/system/noemia.service
-cp "$REPO_DIR/deploy/Caddyfile" /etc/caddy/Caddyfile
+# Caddy : NOÉMIA est un site parmi d'autres (/etc/caddy/sites/*.caddy), on ne touche pas aux autres
+mkdir -p /etc/caddy/sites
+cp "$REPO_DIR/deploy/noemia.caddy" /etc/caddy/sites/noemia.caddy
+grep -q "import sites/\*.caddy" /etc/caddy/Caddyfile || echo "import sites/*.caddy" >> /etc/caddy/Caddyfile
+caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 systemctl daemon-reload
 systemctl enable --now noemia
-systemctl reload caddy || systemctl restart caddy
-ufw allow 80,443/tcp >/dev/null 2>&1 || true
+systemctl restart noemia
+systemctl reload caddy
 
 echo "✓ Terminé. Test : curl https://vps-1d994dff.vps.ovh.ca/health"
