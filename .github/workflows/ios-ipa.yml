@@ -14,7 +14,14 @@ permissions:
 jobs:
   build:
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        # standard : appli + widget · complet : + « Partager » et Apple Watch
+        variante: [standard, complet]
+    env:
+      NOEMIA_VARIANTE: ${{ matrix.variante }}
     defaults:
       run:
         working-directory: app
@@ -43,21 +50,31 @@ jobs:
           SCHEME=$(basename "$WS" .xcworkspace)
           echo "Workspace: $WS — scheme: $SCHEME"
           xcodebuild -workspace "$WS" -scheme "$SCHEME" -configuration Release \
-            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            -destination 'generic/platform=iOS' -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build | tail -n 200
+            build > build.log 2>&1 || { tail -n 80 build.log; exit 1; }
+          tail -n 20 build.log
+
+      # En cas d'échec : les erreurs de compilation deviennent des annotations publiques,
+      # lisibles sans compte GitHub (API check-runs), pour pouvoir les corriger vite.
+      - name: Erreurs de compilation
+        if: failure()
+        run: |
+          test -f build.log || exit 0
+          grep -E "error: |BUILD FAILED|fatal error" build.log | sed -E 's#^.*/(app|ios|modules|targets|node_modules)/#\1/#' | sort -u | head -n 45 | while IFS= read -r l; do echo "::error::$l"; done
 
       - name: Paquet .ipa
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/*.app Payload/
           VERSION=$(node -p "require('./app.json').expo.version")
-          zip -qr "NOEMIA-$VERSION.ipa" Payload
+          SUFFIX=$([ "$NOEMIA_VARIANTE" = "complet" ] && echo "-complet" || echo "")
+          zip -qr "NOEMIA$SUFFIX-$VERSION.ipa" Payload
           ls -lh *.ipa
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NOEMIA-ipa
+          name: NOEMIA-ipa-${{ matrix.variante }}
           path: app/*.ipa
           retention-days: 30
 

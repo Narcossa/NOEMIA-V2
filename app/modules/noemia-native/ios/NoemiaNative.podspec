@@ -16,7 +16,7 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
-  s.frameworks = 'ActivityKit', 'CoreSpotlight', 'MapKit', 'Security', 'Speech', 'AVFoundation'
+  s.frameworks = 'ActivityKit', 'CoreSpotlight', 'MapKit', 'Security', 'Speech', 'AVFoundation', 'WatchConnectivity'
   # Cadres iOS 26 : liés « faibles » pour que l'appli démarre aussi sur un iOS plus ancien
   s.weak_frameworks = 'AlarmKit', 'FoundationModels'
 

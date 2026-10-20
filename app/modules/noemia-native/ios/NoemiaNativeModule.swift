@@ -33,8 +33,14 @@ public class NoemiaNativeModule: Module {
     Function("setSession") { (token: String, apiUrl: String) in
       NoemiaKeychain.save(token)
       UserDefaults.standard.set(apiUrl, forKey: "noemia.apiUrl")
+      NoemiaGroup.share(token: token, apiUrl: apiUrl)                       // extension « Partager »
+      NoemiaWatchLink.shared.send(["token": token, "apiUrl": apiUrl])       // Apple Watch
     }
-    Function("clearSession") { NoemiaKeychain.delete() }
+    Function("clearSession") {
+      NoemiaKeychain.delete()
+      NoemiaGroup.share(token: nil, apiUrl: UserDefaults.standard.string(forKey: "noemia.apiUrl") ?? "")
+      NoemiaWatchLink.shared.send(["token": "", "apiUrl": ""])
+    }
 
     // --- Concentration : état posé par le filtre « NOÉMIA » ----------------------
     Function("focusState") { () -> [String: Any] in

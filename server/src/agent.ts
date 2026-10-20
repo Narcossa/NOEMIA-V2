@@ -128,15 +128,17 @@ function deviceBlock(device?: Record<string, unknown>) {
 }
 
 export type ImageInput = { data: string; media_type: "image/jpeg" | "image/png" | "image/webp" };
+export type DocumentInput = { data: string; media_type: "application/pdf" };
 
-export async function turn(userId: number, text: string, tz: string, emit: (e: TurnEvent) => void = () => {}, device?: Record<string, unknown>, image?: ImageInput): Promise<TurnResult> {
+export async function turn(userId: number, text: string, tz: string, emit: (e: TurnEvent) => void = () => {}, device?: Record<string, unknown>, image?: ImageInput, document?: DocumentInput): Promise<TurnResult> {
   const ctx: Ctx = { userId, tz, cards: [], phone: [] };
   const messages = loadConversation(userId);
   const body = `${stamp(tz)}${deviceBlock(device)}\n${text}`;
-  // Photo jointe (appareil photo, photothèque) : envoyée à Claude avec la question
-  messages.push({ role: "user", content: image
-    ? [{ type: "image", source: { type: "base64", media_type: image.media_type, data: image.data } }, { type: "text", text: body }]
-    : body });
+  // Photo ou PDF joints (appareil photo, photothèque, « Partager › NOÉMIA ») : envoyés à Claude avec la question
+  const attachments: Anthropic.ContentBlockParam[] = [];
+  if (document) attachments.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: document.data } });
+  if (image) attachments.push({ type: "image", source: { type: "base64", media_type: image.media_type, data: image.data } });
+  messages.push({ role: "user", content: attachments.length ? [...attachments, { type: "text", text: body }] : body });
   run("INSERT INTO log (user_id, role, text) VALUES (?, 'toi', ?)", userId, text);
 
   const system: Anthropic.TextBlockParam[] = [

@@ -4,11 +4,11 @@ import { config } from "./config.ts";
 import { all, one, run } from "./db.ts";
 import { hashToken, newToken, sign, verify, encrypt } from "./crypto.ts";
 import { accountsOf, authUrl, exchangeCode } from "./google.ts";
-import { turn, resetConversation, type ImageInput } from "./agent.ts";
+import { turn, resetConversation, type ImageInput, type DocumentInput } from "./agent.ts";
 import { listEvents } from "./tools/calendar.ts";
 import { search } from "./tools/gmail.ts";
 
-const app = Fastify({ logger: { level: "info" }, trustProxy: true, bodyLimit: 10 * 1024 * 1024 });
+const app = Fastify({ logger: { level: "info" }, trustProxy: true, bodyLimit: 20 * 1024 * 1024 });
 
 // --- Sessions de l'appli ---------------------------------------------------
 function userFrom(req: FastifyRequest): number | null {
@@ -106,10 +106,13 @@ app.get("/api/me", async req => {
 });
 
 app.post("/api/chat", async req => {
-  const { text, tz, channel } = req.body as { text: string; tz?: string; channel?: string };
+  const { text, tz, channel, image, document } = req.body as { text: string; tz?: string; channel?: string; image?: ImageInput; document?: DocumentInput };
   if (!text?.trim()) return { reply: "Je n'ai rien entendu.", emotion: "neutre", cards: [], phone: [] };
-  const t = (channel === "siri" ? "[Via Siri] " : "") + text.trim().slice(0, 4000);
-  return turn(uid(req), t, tz || config.defaultTimezone);
+  // Siri, montre et partage : réponses courtes, sans action à confirmer sur place
+  const prefix = channel === "siri" || channel === "montre" || channel === "partage" ? "[Via Siri] " : "";
+  const img = image?.data && /^image\/(jpeg|png|webp)$/.test(image.media_type) ? image : undefined;
+  const doc = document?.data && document.media_type === "application/pdf" ? document : undefined;
+  return turn(uid(req), prefix + text.trim().slice(0, 16000), tz || config.defaultTimezone, undefined, undefined, img, doc);
 });
 
 // Souvenirs et derniers échanges, indexés dans Spotlight par l'appli
