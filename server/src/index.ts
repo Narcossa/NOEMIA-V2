@@ -73,6 +73,28 @@ app.get("/auth/google/callback", async (req, reply) => {
   return back({ token, name: user.name });
 });
 
+// --- Pages publiques (exigées par Google pour l'écran de consentement) ------
+const page = (title: string, body: string) => `<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
+<style>body{font:16px/1.6 system-ui,sans-serif;max-width:640px;margin:48px auto;padding:0 20px;color:#141922}h1{font-weight:400;letter-spacing:.04em}</style>
+</head><body>${body}</body></html>`;
+
+app.get("/", async (_req, reply) => reply.type("text/html").send(page("NOÉMIA", `
+<h1>NOÉMIA</h1><p>Compagnon vocal privé de gestion du quotidien, réservé à la famille de Mathis Gosselin (NOEM).
+Cette application n'est pas publique.</p><p><a href="/confidentialite">Règles de confidentialité</a></p>`)));
+
+app.get("/confidentialite", async (_req, reply) => reply.type("text/html").send(page("NOÉMIA · Confidentialité", `
+<h1>Règles de confidentialité</h1>
+<p>NOÉMIA est une application privée, utilisée uniquement par Mathis Gosselin et sa famille.</p>
+<p><b>Données Google utilisées :</b> agenda, tâches, emails et contacts des comptes que l'utilisateur connecte lui-même.
+Elles servent uniquement à répondre à ses demandes (lire, résumer, créer un événement, envoyer un email après confirmation).</p>
+<p><b>Stockage :</b> les jetons d'accès Google sont chiffrés sur un serveur privé (OVH). L'historique des conversations et les souvenirs
+de l'assistant y sont conservés et peuvent être effacés à la demande (« oublie ça », déconnexion du compte).</p>
+<p><b>Partage :</b> aucune donnée n'est vendue ni partagée. Le texte des demandes est transmis à Anthropic (Claude) pour être compris,
+sans être utilisé pour entraîner des modèles.</p>
+<p><b>Révocation :</b> l'accès peut être retiré à tout moment sur https://myaccount.google.com/permissions.</p>
+<p>Contact : mathis.gosselin.noem@gmail.com</p>`)));
+
 // --- API de l'appli --------------------------------------------------------
 app.get("/health", async () => ({ ok: true }));
 
