@@ -1,7 +1,7 @@
 // Agenda Google : lecture sur tous les comptes, création/modification/suppression après confirmation.
 import { google, type calendar_v3 } from "googleapis";
 import { allClients, clientFor } from "../google.ts";
-import { prepare, registerExecutor } from "./pending.ts";
+import { prepare, registerEditor, registerExecutor } from "./pending.ts";
 import { tool, str, ACCOUNT, type Ctx } from "./types.ts";
 
 const cal = (auth: any) => google.calendar({ version: "v3", auth });
@@ -61,6 +61,16 @@ registerExecutor("calendar.create", async (ctx, p) => {
   const r = await cal(auth).events.insert({ calendarId: p.calendrier ?? "primary", sendUpdates: p.invites?.length ? "all" : "none", requestBody: p.event });
   return `Événement créé : ${r.data.summary} (${fmtRange(r.data.start, r.data.end, ctx.tz)})`;
 });
+// Modifications faites sur la carte : titre, lieu, début, fin (heure locale AAAA-MM-JJTHH:MM)
+registerEditor("calendar.create", (p, e, ctx) => {
+  const ev = { ...p.event };
+  if (e.titre) ev.summary = e.titre;
+  if (e.lieu !== undefined) ev.location = e.lieu;
+  if (e.debut) ev.start = when(e.debut, ctx.tz);
+  if (e.fin) ev.end = when(e.fin, ctx.tz);
+  return { ...p, event: ev };
+});
+
 registerExecutor("calendar.update", async (ctx, p) => {
   const { email, calendarId, eventId } = unref(p.ref);
   const { auth } = clientFor(ctx.userId, email);
@@ -95,6 +105,7 @@ export const calendarTools = [
       return prepare(ctx, "calendar.create", { event, compte: i.compte, calendrier: i.calendrier, invites: i.invites }, {
         kind: "evenement", eyebrow: "Agenda · nouvel événement", title: i.titre,
         body: [fmtRange(start, end, ctx.tz), i.lieu, i.invites?.length ? "Invités : " + i.invites.join(", ") : ""].filter(Boolean).join("\n"),
+        data: { titre: i.titre, lieu: i.lieu ?? "", debut: start.date ? null : toInstant(i.debut, ctx.tz), fin: "dateTime" in end && end.dateTime ? toInstant(String(end.dateTime), ctx.tz) : null, journee: !!start.date },
       });
     }),
 

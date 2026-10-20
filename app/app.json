@@ -3,7 +3,7 @@
     "name": "NOÉMIA",
     "slug": "noemia",
     "scheme": "noemia",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -54,7 +54,7 @@
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "16.4"
+            "deploymentTarget": "17.0"
           }
         }
       ],

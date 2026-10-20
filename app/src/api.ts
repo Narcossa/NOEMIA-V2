@@ -12,7 +12,13 @@ const TOKEN_KEY = "noemia.session";
 
 export const timezone = () => getCalendars()[0]?.timeZone ?? "Europe/Paris";
 
-export type Card = { kind: string; eyebrow: string; title: string; body?: string; actionId?: number };
+export type Card = { kind: string; eyebrow: string; title: string; body?: string; actionId?: number; data?: any };
+export type Today = {
+  prochain: { titre: string; quand: string; debut: string; lieu?: string } | null;
+  rendezVous: number; taches: number; urgents: number;
+  meteo: { temperature: number; libelle: string; icone: string; max?: number; min?: number } | null;
+};
+export type Meeting = { titre: string; resume: string; decisions: string[]; taches: string[] };
 export type PhoneAction =
   | { type: "sms"; to: string; body: string }
   | { type: "call"; to: string }
@@ -68,6 +74,17 @@ export const api = {
   removeAccount: (id: number) => call(`/api/accounts/${id}`, { method: "DELETE" }),
   upcoming: () => call<{ titre: string; debut: string; quand: string; lieu?: string }[]>(`/api/upcoming?hours=48&tz=${encodeURIComponent(timezone())}`),
   memories: () => call<{ souvenirs: { id: number; text: string; at: string }[]; echanges: { id: number; text: string; at: string }[] }>("/api/memories"),
+  today: (lat?: number, lon?: number) =>
+    call<Today>(`/api/today?tz=${encodeURIComponent(timezone())}${lat !== undefined ? `&lat=${lat}&lon=${lon}` : ""}`),
+  confirmAction: (id: number, edits?: object) =>
+    call<{ result: string; phone: PhoneAction[] }>(`/api/actions/${id}/confirm`, { method: "POST", body: JSON.stringify({ edits, tz: timezone() }) }),
+  cancelAction: (id: number) => call(`/api/actions/${id}/cancel`, { method: "POST", body: "{}" }),
+  completeTask: (liste: string, id: string, titre: string, compte?: string) =>
+    call("/api/tasks/complete", { method: "POST", body: JSON.stringify({ liste, id, titre, compte }) }),
+  addTasks: (titres: string[], liste?: string) =>
+    call<{ liste: string }>("/api/tasks/add", { method: "POST", body: JSON.stringify({ titres, liste }) }),
+  meeting: (transcript: string, minutes: number) =>
+    call<Meeting>("/api/meeting", { method: "POST", body: JSON.stringify({ transcript, minutes }) }),
   urgent: () => call<{ id: string; de: string; sujet: string }[]>(`/api/urgent?tz=${encodeURIComponent(timezone())}`),
   logout: async () => { await call("/api/logout", { method: "POST", body: "{}" }).catch(() => {}); await clearToken(); },
 };

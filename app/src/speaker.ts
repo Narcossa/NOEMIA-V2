@@ -24,6 +24,7 @@ export class Speaker {
   private waiters: (() => void)[] = [];
   voice?: string;
   rate = 1;
+  muted = false;   // mode silencieux (question tapée au clavier) : texte seulement
 
   constructor(private hooks: Hooks) {}
 
@@ -84,6 +85,11 @@ export class Speaker {
     const text = raw.replace(/\s+/g, " ").trim();
     if (!text || !/[\p{L}\p{N}]/u.test(text)) return;
     const gen = this.gen;
+    if (this.muted) {
+      if (!this.started) { this.started = true; this.hooks.onStart?.(); }
+      this.hooks.onSentence?.(text);
+      return;
+    }
     this.pending++;
     let gotWord = false, timer: ReturnType<typeof setTimeout> | undefined;
     Speech.speak(text, {

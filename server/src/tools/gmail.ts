@@ -1,7 +1,7 @@
 // Gmail : recherche et lecture sur tous les comptes ; envoi et réponse après confirmation.
 import { google, type gmail_v1 } from "googleapis";
 import { allClients, clientFor } from "../google.ts";
-import { prepare, registerExecutor } from "./pending.ts";
+import { prepare, registerEditor, registerExecutor } from "./pending.ts";
 import { tool, str, num, ACCOUNT, type Ctx } from "./types.ts";
 
 const api = (auth: any) => google.gmail({ version: "v1", auth });
@@ -42,6 +42,8 @@ registerExecutor("gmail.send", async (ctx, p) => {
   return `Email envoyé à ${p.a.join(", ")} : « ${p.sujet} »`;
 });
 
+registerEditor("gmail.send", (p, e) => ({ ...p, sujet: e.sujet ?? p.sujet, corps: e.corps ?? p.corps, a: e.a ?? p.a }));
+
 export async function search(ctx: Ctx, q: string, max: number, account?: string) {
   const clients = account ? [clientFor(ctx.userId, account)] : allClients(ctx.userId);
   const out: any[] = [];
@@ -78,5 +80,6 @@ export const gmailTools = [
     async (ctx, i) => prepare(ctx, "gmail.send", i, {
       kind: "email", eyebrow: i.reponse_a ? "Email · réponse" : "Email · brouillon", title: "À : " + i.a.join(", "),
       body: `${i.sujet}\n\n${i.corps}`,
+      data: { a: i.a, sujet: i.sujet, corps: i.corps },
     })),
 ];

@@ -13,7 +13,7 @@ type Native = {
   startActivity(kind: string, titre: string, detail: string, fin: string | null): Promise<string | null>;
   updateActivity(id: string, etat: string, detail: string, fin: string | null, endAfterSeconds: number | null): Promise<void>;
   endAllActivities(): Promise<void>;
-  tripEstimate(destination: string): Promise<{ nom: string; arrivee: string; minutes: number }>;
+  tripEstimate(destination: string): Promise<{ nom: string; arrivee: string; minutes: number; lat: number; lon: number }>;
   alarmKitAvailable(): boolean;
   scheduleAlarm(at: string | null, seconds: number | null, label: string): Promise<boolean>;
   localModelStatus(): string;

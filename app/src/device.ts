@@ -11,7 +11,7 @@ import { Native } from "../modules/noemia-native/src";
 
 export type DeviceContext = {
   sante?: { sommeil_heures?: number; pas_aujourdhui?: number; frequence_cardiaque_repos?: number; energie_active_kcal?: number };
-  lieu?: { ville?: string; quartier?: string; rue?: string };
+  lieu?: { ville?: string; quartier?: string; rue?: string; lat?: number; lon?: number };
   concentration?: { active: boolean; discret: boolean };
   icloud?: { evenements: { titre: string; debut: string; lieu?: string }[]; rappels: { titre: string; echeance?: string; liste?: string }[] };
 };
@@ -82,7 +82,8 @@ async function place(): Promise<DeviceContext["lieu"]> {
     if (!(await Location.getForegroundPermissionsAsync()).granted) return undefined;
     const pos = await Location.getLastKnownPositionAsync({ maxAge: 15 * 60_000 }) ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
     const [g] = await Location.reverseGeocodeAsync(pos.coords);
-    return g ? { ville: g.city ?? undefined, quartier: g.district ?? undefined, rue: g.street ?? undefined } : undefined;
+    const r3 = (n: number) => Math.round(n * 1000) / 1000;
+    return { ville: g?.city ?? undefined, quartier: g?.district ?? undefined, rue: g?.street ?? undefined, lat: r3(pos.coords.latitude), lon: r3(pos.coords.longitude) };
   } catch { return undefined; }
 }
 

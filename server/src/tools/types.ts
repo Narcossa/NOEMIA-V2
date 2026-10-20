@@ -7,6 +7,7 @@ export type Card = {
   title: string;
   body?: string;
   actionId?: number;     // présent si la carte attend une confirmation
+  data?: any;            // contenu modifiable ou visuel (email, événement, liste, météo…)
 };
 
 // Action que seul le téléphone peut faire (SMS, appel, WhatsApp, Spotify, Raccourcis)
@@ -27,6 +28,7 @@ export type Ctx = {
   tz: string;
   cards: Card[];
   phone: PhoneAction[];
+  device?: { lat?: number; lon?: number; ville?: string };
 };
 
 export type Tool = {

@@ -13,11 +13,12 @@ import { memoryTools, recentMemories } from "./tools/memory.ts";
 import { phoneTools } from "./tools/phone.ts";
 import { pendingTools } from "./tools/pending.ts";
 import { iosTools } from "./tools/ios.ts";
+import { meteoTools } from "./tools/meteo.ts";
 import type { Card, Ctx, PhoneAction, Tool } from "./tools/types.ts";
 
 const client = new Anthropic();
 
-const TOOLS: Tool[] = [...calendarTools, ...taskTools, ...gmailTools, ...contactTools, ...memoryTools, ...phoneTools, ...iosTools, ...pendingTools];
+const TOOLS: Tool[] = [...calendarTools, ...taskTools, ...gmailTools, ...contactTools, ...memoryTools, ...phoneTools, ...iosTools, ...meteoTools, ...pendingTools];
 const BY_NAME = new Map(TOOLS.map(t => [t.def.name, t]));
 const DEFS = TOOLS.map(t => t.def);
 
@@ -51,6 +52,8 @@ Données de l'iPhone :
 - Chaque message peut être précédé d'un bloc « [iPhone : …] » : sommeil de la nuit, pas du jour, fréquence cardiaque au repos, lieu actuel, agenda iCloud et Rappels de l'iPhone. Utilise-les avec tact et seulement quand c'est utile (« Tu as peu dormi, je t'allège la matinée ? »). Ne les récite jamais sans raison.
 - « Rappelle-moi de… à 18 h » : rappel_iphone_preparer (l'iPhone sonnera). Les listes partagées ou pro restent dans les tâches Google.
 - Si le bloc iPhone indique « concentration » avec « discret » : réponses très brèves, pas de bavardage.
+- Les cartes peuvent être modifiées et confirmées directement à l'écran : un bloc « [Fait à l'écran…] » t'en informe, n'y reviens pas.
+- Météo : utilise l'outil meteo (une carte s'affiche, résume en une phrase).
 - Quand on te montre une photo (devis, chantier, objet, document), décris l'essentiel, puis propose l'action utile (ajouter au devis, créer une tâche, envoyer par email…).
 
 Via Siri (message commençant par « [Via Siri] ») : réponds en une ou deux phrases, sans préparer d'action à confirmer ; si une action est nécessaire, dis simplement d'ouvrir NOÉMIA pour la confirmer.`;
@@ -127,13 +130,25 @@ function deviceBlock(device?: Record<string, unknown>) {
   return `\n[iPhone : ${JSON.stringify(device).slice(0, 3000)}]`;
 }
 
+// Ce qui a été fait directement à l'écran (carte confirmée, case cochée…) : NOÉMIA en est informée au tour suivant
+const screenNotes = new Map<number, string[]>();
+export function noteFromScreen(userId: number, note: string) {
+  const list = screenNotes.get(userId) ?? [];
+  list.push(note);
+  screenNotes.set(userId, list.slice(-10));
+}
+
 export type ImageInput = { data: string; media_type: "image/jpeg" | "image/png" | "image/webp" };
 export type DocumentInput = { data: string; media_type: "application/pdf" };
 
 export async function turn(userId: number, text: string, tz: string, emit: (e: TurnEvent) => void = () => {}, device?: Record<string, unknown>, image?: ImageInput, document?: DocumentInput): Promise<TurnResult> {
-  const ctx: Ctx = { userId, tz, cards: [], phone: [] };
+  const lieu = (device as any)?.lieu ?? {};
+  const ctx: Ctx = { userId, tz, cards: [], phone: [], device: { lat: lieu.lat, lon: lieu.lon, ville: lieu.ville } };
   const messages = loadConversation(userId);
-  const body = `${stamp(tz)}${deviceBlock(device)}\n${text}`;
+  const notes = screenNotes.get(userId);
+  screenNotes.delete(userId);
+  const fromScreen = notes?.length ? `\n[Fait à l'écran depuis le dernier échange : ${notes.join(" ; ")}]` : "";
+  const body = `${stamp(tz)}${deviceBlock(device)}${fromScreen}\n${text}`;
   // Photo ou PDF joints (appareil photo, photothèque, « Partager › NOÉMIA ») : envoyés à Claude avec la question
   const attachments: Anthropic.ContentBlockParam[] = [];
   if (document) attachments.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: document.data } });

@@ -4,7 +4,11 @@ import { config } from "./config.ts";
 import { all, one, run } from "./db.ts";
 import { hashToken, newToken, sign, verify, encrypt } from "./crypto.ts";
 import { accountsOf, authUrl, exchangeCode } from "./google.ts";
-import { turn, resetConversation, type ImageInput, type DocumentInput } from "./agent.ts";
+import { turn, resetConversation, noteFromScreen, type ImageInput, type DocumentInput } from "./agent.ts";
+import Anthropic from "@anthropic-ai/sdk";
+import { executeAction, cancelAction, ActionError } from "./tools/pending.ts";
+import { addTasks, completeTask, dueToday } from "./tools/tasks.ts";
+import { forecast } from "./tools/meteo.ts";
 import { listEvents } from "./tools/calendar.ts";
 import { search } from "./tools/gmail.ts";
 
@@ -113,6 +117,95 @@ app.post("/api/chat", async req => {
   const img = image?.data && /^image\/(jpeg|png|webp)$/.test(image.media_type) ? image : undefined;
   const doc = document?.data && document.media_type === "application/pdf" ? document : undefined;
   return turn(uid(req), prefix + text.trim().slice(0, 16000), tz || config.defaultTimezone, undefined, undefined, img, doc);
+});
+
+// --- Cartes modifiables : confirmer ou annuler directement depuis l'écran --------
+app.post("/api/actions/:id/confirm", async (req, reply) => {
+  const ctx = { userId: uid(req), tz: (req.body as any)?.tz || config.defaultTimezone, cards: [], phone: [] as any[] };
+  try {
+    const result = await executeAction(ctx, Number((req.params as any).id), (req.body as any)?.edits);
+    noteFromScreen(ctx.userId, result);
+    return { result, phone: ctx.phone };
+  } catch (e) {
+    if (e instanceof ActionError) return reply.code(409).send({ error: e.message });
+    throw e;
+  }
+});
+app.post("/api/actions/:id/cancel", async req => {
+  cancelAction(uid(req), Number((req.params as any).id));
+  noteFromScreen(uid(req), "action annulée");
+  return { ok: true };
+});
+
+// Liste à cocher et tâches issues d'une réunion
+app.post("/api/tasks/complete", async req => {
+  const { liste, id, titre, compte } = req.body as { liste: string; id: string; titre?: string; compte?: string };
+  await completeTask({ userId: uid(req), tz: config.defaultTimezone, cards: [], phone: [] }, liste, id, compte);
+  noteFromScreen(uid(req), `« ${titre ?? "tâche"} » cochée dans ${liste}`);
+  return { ok: true };
+});
+app.post("/api/tasks/add", async req => {
+  const { liste, titres } = req.body as { liste?: string; titres: string[] };
+  const nom = await addTasks({ userId: uid(req), tz: config.defaultTimezone, cards: [], phone: [] }, liste, titres.slice(0, 30));
+  noteFromScreen(uid(req), `${titres.length} tâche(s) ajoutée(s) à ${nom}`);
+  return { ok: true, liste: nom };
+});
+
+// --- Bandeau « Aujourd'hui » : prochain rendez-vous, météo, tâches du jour, emails urgents
+app.get("/api/today", async req => {
+  const q = req.query as { tz?: string; lat?: string; lon?: string };
+  const tz = q.tz || config.defaultTimezone;
+  const ctx = { userId: uid(req), tz, cards: [], phone: [] };
+  const end = new Date(); end.setHours(23, 59, 59, 999);
+  const [events, taches, urgents, meteo] = await Promise.all([
+    listEvents(ctx, new Date().toISOString(), end.toISOString()).catch(() => []),
+    dueToday(ctx).catch(() => []),
+    search(ctx, "is:unread is:important newer_than:1d", 5).catch(() => []),
+    q.lat && q.lon ? forecast(Number(q.lat), Number(q.lon)).catch(() => null) : Promise.resolve(null),
+  ]);
+  return {
+    prochain: events.find((e: any) => e.debut && e.debut.length > 10) ?? null,
+    rendezVous: events.length,
+    taches: taches.length,
+    urgents: urgents.length,
+    meteo: meteo ? { ...meteo.maintenant, max: meteo.jours[0]?.max, min: meteo.jours[0]?.min } : null,
+  };
+});
+
+// --- Mode réunion : compte rendu, décisions et tâches à partir de la transcription
+const claude = new Anthropic();
+app.post("/api/meeting", async req => {
+  const { transcript, minutes } = req.body as { transcript: string; minutes?: number };
+  if (!transcript?.trim()) return { titre: "Réunion", resume: "Je n'ai rien entendu pendant la réunion.", decisions: [], taches: [] };
+  const r = await claude.messages.create({
+    model: config.anthropicModel,
+    max_tokens: 3000,
+    output_config: {
+      effort: "low",
+      format: {
+        type: "json_schema",
+        schema: {
+          type: "object", additionalProperties: false,
+          properties: {
+            titre: { type: "string" },
+            resume: { type: "string" },
+            decisions: { type: "array", items: { type: "string" } },
+            taches: { type: "array", items: { type: "string" } },
+          },
+          required: ["titre", "resume", "decisions", "taches"],
+        },
+      },
+    },
+    messages: [{ role: "user", content:
+      `Voici la transcription brute d'une réunion de ${minutes ?? "?"} minutes (reconnaissance vocale, donc imparfaite). ` +
+      `Rédige en français : un titre court, un résumé en 4 à 8 phrases, les décisions prises, et les tâches concrètes à faire ` +
+      `(une par élément, formulées comme une action, avec la personne concernée si elle est citée).\n\n${transcript.slice(0, 60000)}` }],
+  } as any);
+  const text = (r.content.find((b: any) => b.type === "text") as any)?.text ?? "{}";
+  const out = JSON.parse(text);
+  run("INSERT INTO log (user_id, role, text) VALUES (?, 'noemia', ?)", uid(req), `Compte rendu « ${out.titre} » : ${out.resume}`);
+  run("INSERT INTO memories (user_id, text) VALUES (?, ?)", uid(req), `Réunion du ${new Date().toLocaleDateString("fr-FR")} « ${out.titre} » : ${out.resume}`);
+  return out;
 });
 
 // Souvenirs et derniers échanges, indexés dans Spotlight par l'appli

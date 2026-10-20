@@ -104,9 +104,11 @@ public class NoemiaNativeModule: Module {
       dir.destination = item
       dir.transportType = .automobile
       let eta = try await MKDirections(request: dir).calculateETA()
+      let coord = item.placemark.coordinate
       return ["nom": item.name ?? destination,
               "arrivee": iso.string(from: eta.expectedArrivalDate),
-              "minutes": Int((eta.expectedTravelTime / 60).rounded())]
+              "minutes": Int((eta.expectedTravelTime / 60).rounded()),
+              "lat": coord.latitude, "lon": coord.longitude]
     }
 
     // --- Alarmes et minuteurs natifs (AlarmKit, iOS 26) ------------------------------

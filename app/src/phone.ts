@@ -7,12 +7,13 @@ import { addIcloudEvent, addReminder } from "./device";
 import { Native } from "../modules/noemia-native/src";
 
 // Trajet : estimation d'arrivée par Plans, affichée en Live Activity / Dynamic Island
-async function startTrip(destination: string) {
+export async function startTrip(destination: string) {
   const eta = await Native.tripEstimate(destination);
-  if (!eta) return;
+  if (!eta) return null;
   const arrivee = new Date(eta.arrivee);
   const h = arrivee.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   await Native.startActivity("trajet", `Vers ${eta.nom}`, `Arrivée prévue à ${h} · ${eta.minutes} min`, arrivee);
+  return { ...eta, heure: h };
 }
 
 const digits = (n: string) => n.replace(/[^\d+]/g, "");
@@ -39,7 +40,6 @@ export async function perform(a: PhoneAction): Promise<string | null> {
         return null;
       }
       case "maps":
-        startTrip(a.destination).catch(() => {});
         await Linking.openURL(`maps://?daddr=${encodeURIComponent(a.destination)}`);
         return null;
       case "alarm": {

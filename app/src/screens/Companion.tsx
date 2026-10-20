@@ -2,7 +2,7 @@
 // Un appui lance l'échange ; après chaque réponse elle se remet à écouter toute seule.
 // Appui pendant qu'elle parle : on l'interrompt et on lui parle. Appui long : fin de la conversation.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { AppState, KeyboardAvoidingView, Linking, PanResponder, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Notifications from "expo-notifications";
@@ -13,11 +13,17 @@ import { Native } from "../../modules/noemia-native/src";
 import { ensureListenPermission } from "../voice";
 import { Speaker } from "../speaker";
 import { Ear } from "../ear";
-import { perform } from "../phone";
+import { perform, startTrip } from "../phone";
 import { askNotificationPermission, checkUrgent, registerBackground, reschedule } from "../notifications";
 import { useDaylight } from "../theme";
-import { ActionCard, CameraIcon, MicButton, ProfileIcon, type Phase } from "../ui";
+import { CameraIcon, MicButton, ProfileIcon, type Phase } from "../ui";
 import { Profile } from "./Profile";
+import { CardView } from "../components/Cards";
+import { TodayBanner } from "../components/Today";
+import { QuickActions, type QuickAction } from "../components/QuickActions";
+import { Composer } from "../components/Composer";
+import { Thread, type ThreadItem } from "../components/Thread";
+import { MeetingMode } from "../components/Meeting";
 
 type Props = { greeting?: string; onSignedOut: () => void };
 
@@ -43,6 +49,12 @@ export function Companion({ greeting, onSignedOut }: Props) {
   const [subtitle, setSubtitle] = useState<{ who: "toi" | "noemia"; text: string }>({ who: "noemia", text: "" });
   const [card, setCard] = useState<Card | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [threadOpen, setThreadOpen] = useState(false);
+  const [meetingOpen, setMeetingOpen] = useState(false);
+  const [thread, setThread] = useState<ThreadItem[]>([]);
+  const addThread = (who: ThreadItem["who"], text: string, image?: string) =>
+    setThread(t => [...t.slice(-199), { id: `${Date.now()}-${Math.random()}`, who, text, image, at: Date.now() }]);
   const settings = useRef<Settings>({});
   const conversation = useRef(false);
   const phaseRef = useRef<Phase>("repos");
@@ -97,11 +109,12 @@ export function Companion({ greeting, onSignedOut }: Props) {
   }, [endConversation]);
 
   // Un tour complet : texte diffusé → phrases dites au fil de l'eau → actions → nouvelle écoute
-  const runTurn = useCallback(async (start: (onEvent: (e: StreamEvent) => void, signal: AbortSignal) => Promise<void>): Promise<void> => {
+  const runTurn = useCallback(async (start: (onEvent: (e: StreamEvent) => void, signal: AbortSignal) => Promise<void>, opts: { muted?: boolean } = {}): Promise<void> => {
     setPhase("reflexion");
     send({ type: "emotion", name: "concentration" });
     const sp = speaker.current;
     sp.voice = settings.current.voice; sp.rate = settings.current.rate ?? 1;
+    sp.muted = !!opts.muted;
     sp.begin();
     let saidSomething = false;
     let phone: PhoneAction[] = [];
@@ -117,8 +130,9 @@ export function Companion({ greeting, onSignedOut }: Props) {
           case "status": if (!saidSomething && STATUS[ev.tool]) { saidSomething = true; sp.push(STATUS[ev.tool] + " "); } break;
           case "done": {
             const last = ev.cards[ev.cards.length - 1] ?? null;
-            setCard(last);
-            if (last && !last.actionId) setTimeout(() => setCard(cur => (cur === last ? null : cur)), 9000);
+            if (last) setCard(last);
+            // Cartes d'information : elles restent un moment, les listes et visuels jusqu'à fermeture
+            if (last && !last.actionId && !["liste", "meteo", "trajet", "photo"].includes(last.kind)) setTimeout(() => setCard(cur => (cur === last ? null : cur)), 12000);
             phone = ev.phone;
             break;
           }
@@ -146,13 +160,18 @@ export function Companion({ greeting, onSignedOut }: Props) {
     }
     await sp.whenIdle();
     send({ type: "silence" });
+    if (reply.trim()) addThread("noemia", reply.replace(/\s+/g, " ").trim());
+    if (opts.muted) { sp.muted = false; setPhase("repos"); return; }
 
     // Photo demandée : appareil photo ou photothèque, puis NOÉMIA regarde
     const camera = phone.find(a => a.type === "camera") as Extract<PhoneAction, { type: "camera" }> | undefined;
     if (camera) {
       phone = phone.filter(a => a !== camera);
-      const image = await takePhoto(camera.source);
-      if (image) return runTurnRef.current((onEvent, signal) => chatStream(camera.question, onEvent, signal, image));
+      const shot = await takePhoto(camera.source);
+      if (shot) {
+        showPhoto(shot.uri, camera.question);
+        return runTurnRef.current((onEvent, signal) => chatStream(camera.question, onEvent, signal, shot.image));
+      }
     }
 
     // Actions natives sans changer d'appli (Rappels, Calendrier iPhone) : la conversation continue
@@ -162,6 +181,12 @@ export function Companion({ greeting, onSignedOut }: Props) {
     const external = phone.filter(a => !inApp.includes(a));
     if (external.length) {
       endConversation();
+      // Trajet : carte avec la destination et l'heure d'arrivée (et Live Activity)
+      const trip = external.find(a => a.type === "maps") as Extract<PhoneAction, { type: "maps" }> | undefined;
+      if (trip) {
+        const eta = await startTrip(trip.destination).catch(() => null);
+        if (eta) setCard({ kind: "trajet", eyebrow: "Trajet", title: `Vers ${eta.nom}`, data: eta });
+      }
       for (const a of external) { const err = await perform(a); if (err) await sp.sayNow(err); }
       return;
     }
@@ -171,14 +196,19 @@ export function Companion({ greeting, onSignedOut }: Props) {
   const runTurnRef = useRef(runTurn);
   runTurnRef.current = runTurn;
 
-  async function takePhoto(source: "camera" | "photos"): Promise<ImageInput | null> {
+  function showPhoto(uri: string, question: string) {
+    addThread("toi", question, uri);
+    setCard({ kind: "photo", eyebrow: "Photo", title: "", data: { uri } });
+  }
+
+  async function takePhoto(source: "camera" | "photos"): Promise<{ image: ImageInput; uri: string } | null> {
     const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.5, base64: true, allowsEditing: false };
     const perm = source === "camera" ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) { await speaker.current.sayNow("J'ai besoin de l'accès à l'appareil photo. Tu peux l'autoriser dans les Réglages."); return null; }
     const r = source === "camera" ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
     const a = r.canceled ? null : r.assets?.[0];
     if (!a?.base64) return null;
-    return { data: a.base64, media_type: a.mimeType === "image/png" ? "image/png" : "image/jpeg" };
+    return { uri: a.uri, image: { data: a.base64, media_type: a.mimeType === "image/png" ? "image/png" : "image/jpeg" } };
   }
 
   // Fin de phrase entendue
@@ -187,10 +217,17 @@ export function Companion({ greeting, onSignedOut }: Props) {
       // Silence : la conversation s'arrête doucement
       return endConversation(conversation.current ? "Je reste là si tu as besoin. Touche le bouton pour me parler." : "Je n'ai rien entendu. Touche le bouton et parle-moi.");
     }
+    ask(text);
+  }
+
+  // Une question, d'où qu'elle vienne. muted : réponse écrite seulement (question tapée au clavier)
+  function ask(text: string, opts: { muted?: boolean } = {}) {
     setSubtitle({ who: "toi", text });
+    addThread("toi", text);
     if (GOODBYE.test(text)) { conversation.current = false; setInConversation(false); }
-    setCard(cur => (cur?.actionId ? cur : null));
+    setCard(cur => (cur?.actionId || cur?.kind === "liste" ? cur : null));
     lastQuestion.current = text;
+    if (opts.muted) return runTurn((onEvent, signal) => chatStream(text, onEvent, signal), { muted: true });
     // Réponse instantanée sur l'iPhone pour les échanges simples (salutations, merci, heure…)
     if (SIMPLE.test(text.trim()) && Native.localModelReady()) {
       const now = new Date().toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
@@ -320,14 +357,76 @@ export function Companion({ greeting, onSignedOut }: Props) {
     return () => sub.remove();
   }, [ready, handleLink]);
 
-  const confirmCard = (yes: boolean) => {
+  // Carte confirmée à l'écran (éventuellement modifiée) : exécution directe, sans repasser par la conversation
+  const confirmCard = async (edits?: object) => {
+    const cur = card;
+    if (!cur?.actionId) return;
     setCard(null);
     ear.current!.abort();
-    conversation.current = true; setInConversation(true);
-    const text = yes ? "Oui, vas-y." : "Non, annule.";
-    setSubtitle({ who: "toi", text });
-    runTurn((onEvent, signal) => chatStream(text, onEvent, signal));
+    try {
+      const r = await api.confirmAction(cur.actionId, edits);
+      addThread("action", r.result);
+      setSubtitle({ who: "noemia", text: r.result });
+      if (!composerOpen) { send({ type: "emotion", name: "sourire" }); await speaker.current.sayNow("C'est fait."); send({ type: "silence" }); setPhase("repos"); }
+      for (const a of r.phone) { const err = await perform(a); if (err) setSubtitle({ who: "noemia", text: err }); }
+    } catch (e: any) {
+      setSubtitle({ who: "noemia", text: e.message });
+    }
   };
+  const cancelCard = async () => {
+    const cur = card;
+    setCard(null);
+    if (cur?.actionId) { await api.cancelAction(cur.actionId).catch(() => {}); addThread("action", "Annulé"); setSubtitle({ who: "noemia", text: "D'accord, j'annule." }); }
+  };
+  const checkTask = (t: { id: string; titre: string }) => {
+    const d = card?.data;
+    if (!d) return;
+    api.completeTask(d.liste, t.id, t.titre, d.compte).then(() => addThread("action", `${t.titre} : fait`)).catch(e => setSubtitle({ who: "noemia", text: e.message }));
+  };
+
+  async function lookAtPhoto() {
+    const shot = await takePhoto("camera");
+    if (!shot) return;
+    conversation.current = true; setInConversation(true);
+    const q = "Qu'est-ce que tu vois ? Dis-moi l'essentiel et ce que je peux en faire.";
+    setSubtitle({ who: "toi", text: "Regarde ça." });
+    showPhoto(shot.uri, "Regarde ça.");
+    runTurn((onEvent, signal) => chatStream(q, onEvent, signal, shot.image));
+  }
+
+  const stopEverything = async () => {
+    abort.current?.abort();
+    ear.current!.abort();
+    await speaker.current.stop();
+    send({ type: "silence" });
+    conversation.current = false; setInConversation(false);
+    setPhase("repos");
+  };
+
+  const onQuickAction = async (a: QuickAction) => {
+    if (a.special === "reunion") { await stopEverything(); return setMeetingOpen(true); }
+    if (a.special === "photo") return lookAtPhoto();
+    conversation.current = true; setInConversation(true);
+    if (a.special === "briefing" || a.special === "bilan") {
+      addThread("toi", a.label.replace(/^\S+\s/, ""));
+      return runTurn((onEvent, signal) => briefingStream(a.special === "bilan" ? "soir" : "matin", onEvent, signal));
+    }
+    if (a.ask) ask(a.ask);
+  };
+
+  // Glisser vers le haut sur le bas de l'écran : le fil de la conversation
+  const swipe = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 14 && Math.abs(g.dy) > Math.abs(g.dx),
+    onPanResponderRelease: (_, g) => { if (g.dy < -50) setThreadOpen(true); },
+  })).current;
+
+  // Historique récent pour le fil
+  useEffect(() => {
+    api.history(30).then(h => setThread(cur => cur.length ? cur : h.reverse().map((x, i) => ({
+      id: `h${i}`, who: x.role === "toi" ? "toi" : x.role === "action" ? "action" : "noemia", text: x.text,
+      at: new Date(x.at.replace(" ", "T") + "Z").getTime(),
+    })))).catch(() => {});
+  }, []);
 
   return (
     <View style={[st.root, { backgroundColor: c.bg }]}>
@@ -337,11 +436,7 @@ export function Companion({ greeting, onSignedOut }: Props) {
         <Text style={[st.brand, { color: c.ink }]}>NOÉMIA</Text>
         <View style={st.topRight}>
         <Pressable onPress={async () => {
-            const image = await takePhoto("camera");
-            if (!image) return;
-            conversation.current = true; setInConversation(true);
-            setSubtitle({ who: "toi", text: "Regarde ça." });
-            runTurn((onEvent, signal) => chatStream("Qu'est-ce que tu vois ? Dis-moi l'essentiel et ce que je peux en faire.", onEvent, signal, image));
+            lookAtPhoto();
           }} accessibilityRole="button" accessibilityLabel="Montrer quelque chose à NOÉMIA"
           style={[st.iconBtn, { borderColor: c.line, backgroundColor: c.panelSoft }]}>
           <CameraIcon color={c.ink} />
@@ -352,22 +447,52 @@ export function Companion({ greeting, onSignedOut }: Props) {
         </Pressable>
         </View>
       </View>
+      <View style={[st.today, { top: insets.top + 60 }]}>
+        <TodayBanner c={c} onAsk={q => { conversation.current = true; setInConversation(true); ask(q); }} />
+      </View>
 
-      <View style={[st.bottom, { paddingBottom: insets.bottom + 16 }]}>
-        {card ? <ActionCard card={card} c={c} onConfirm={() => confirmCard(true)} onCancel={() => confirmCard(false)} /> : null}
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={st.bottomWrap} pointerEvents="box-none">
+      <View style={[st.bottom, { paddingBottom: composerOpen ? 10 : insets.bottom + 12 }]} {...swipe.panHandlers}>
+        {card ? <CardView card={card} c={c} onConfirm={confirmCard} onCancel={cancelCard} onCheck={checkTask} onClose={() => setCard(null)} /> : null}
         {subtitle.text ? (
-          <View style={[st.sub, { backgroundColor: c.panelSoft }]}>
+          <Pressable onPress={() => setThreadOpen(true)} accessibilityRole="button" accessibilityHint="Ouvre le fil de la conversation"
+            style={[st.sub, { backgroundColor: c.panelSoft }]}>
             <Text style={[st.subText, { color: subtitle.who === "toi" ? c.muted : c.ink, fontStyle: subtitle.who === "toi" ? "italic" : "normal" }]}
-              accessibilityLiveRegion="polite">
+              accessibilityLiveRegion="polite" numberOfLines={6}>
               {subtitle.who === "toi" ? `« ${subtitle.text} »` : subtitle.text}
             </Text>
-          </View>
+          </Pressable>
         ) : null}
-        <MicButton phase={phase} onPress={onMicPress} onLongPress={onMicLongPress} c={c} />
-        <Text style={[st.hint, { color: c.muted }]}>
-          {inConversation ? (phase === "parole" ? "Touche pour l'interrompre · appui long pour terminer" : "Conversation en cours · appui long pour terminer") : " "}
-        </Text>
+        {composerOpen ? (
+          <Composer c={c} onClose={() => setComposerOpen(false)} onSend={t => { conversation.current = false; setInConversation(false); ask(t, { muted: true }); }} />
+        ) : (
+          <>
+            {!inConversation ? <QuickActions c={c} onPick={onQuickAction} /> : null}
+            <View style={st.micRow}>
+              <Pressable onPress={async () => { await stopEverything(); setComposerOpen(true); }} accessibilityRole="button" accessibilityLabel="Écrire à NOÉMIA"
+                style={[st.sideBtn, { borderColor: c.line, backgroundColor: c.panelSoft }]}>
+                <Text style={{ color: c.ink, fontSize: 18 }}>⌨︎</Text>
+              </Pressable>
+              <MicButton phase={phase} onPress={onMicPress} onLongPress={onMicLongPress} c={c} />
+              <Pressable onPress={() => setThreadOpen(true)} accessibilityRole="button" accessibilityLabel="Fil de la conversation"
+                style={[st.sideBtn, { borderColor: c.line, backgroundColor: c.panelSoft }]}>
+                <Text style={{ color: c.ink, fontSize: 17 }}>☰</Text>
+              </Pressable>
+            </View>
+            <Text style={[st.hint, { color: c.muted }]}>
+              {inConversation ? (phase === "parole" ? "Touche pour l'interrompre · appui long pour terminer" : "Conversation en cours · appui long pour terminer") : "Glisse vers le haut pour relire la conversation"}
+            </Text>
+          </>
+        )}
       </View>
+      </KeyboardAvoidingView>
+
+      <Thread visible={threadOpen} items={thread} c={c} onClose={() => setThreadOpen(false)}
+        onReplay={t => { setThreadOpen(false); speaker.current.sayNow(t).then(() => { send({ type: "silence" }); setPhase("repos"); }); }} />
+      <MeetingMode visible={meetingOpen} c={c} onClose={summary => {
+        setMeetingOpen(false);
+        if (summary) { addThread("noemia", `Compte rendu « ${summary.titre} » : ${summary.resume}`); setSubtitle({ who: "noemia", text: `Compte rendu « ${summary.titre} » prêt. Il est dans le fil.` }); }
+      }} />
 
       <Profile visible={profileOpen} onClose={(s?: Settings) => { setProfileOpen(false); if (s) settings.current = s; }}
         onSignedOut={onSignedOut} c={c} />
@@ -381,7 +506,11 @@ const st = StyleSheet.create({
   brand: { fontSize: 13, letterSpacing: 4, fontWeight: "500" },
   topRight: { flexDirection: "row", gap: 10 },
   iconBtn: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  bottom: { position: "absolute", left: 0, right: 0, bottom: 0, alignItems: "center", gap: 12 },
+  today: { position: "absolute", left: 0, right: 0 },
+  bottomWrap: { position: "absolute", left: 0, right: 0, bottom: 0 },
+  bottom: { alignItems: "center", gap: 10 },
+  micRow: { flexDirection: "row", alignItems: "center", gap: 28 },
+  sideBtn: { width: 46, height: 46, borderRadius: 23, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   sub: { marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, maxWidth: 420 },
   subText: { fontSize: 17, lineHeight: 24, textAlign: "center" },
   hint: { fontSize: 12, letterSpacing: 0.2 },
