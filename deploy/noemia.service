@@ -4,9 +4,10 @@ After=network-online.target
 
 [Service]
 Type=simple
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 User=noemia
 WorkingDirectory=/opt/noemia/server
-ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning --env-file=/opt/noemia/server/.env src/index.ts
+ExecStart=/usr/bin/env node --disable-warning=ExperimentalWarning --env-file=/opt/noemia/server/.env src/index.ts
 Restart=always
 RestartSec=3
 NoNewPrivileges=true
