@@ -18,10 +18,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # standard : appli + widget · complet : + « Partager » et Apple Watch
-        variante: [standard, complet]
+        # standard : appli + widget · complet : + « Partager » · montre : + Apple Watch
+        variante: [standard, complet, montre]
     env:
       NOEMIA_VARIANTE: ${{ matrix.variante }}
+      # Code d'équipe de l'identifiant Apple gratuit de Mathis (ajouté par iloader au nom de l'appli)
+      NOEMIA_EQUIPE: 2QQ38FQNNJ
     defaults:
       run:
         working-directory: app
@@ -43,6 +45,15 @@ jobs:
 
       - name: Projet iOS (avatar emballé + prebuild)
         run: npm run prebuild:ios
+
+      # iloader renomme l'appli en « fr.noem.noemia.<code équipe> » mais pas la clé de la montre
+      # qui la désigne : on l'écrit directement avec le nom final.
+      - name: Montre (nom de l'appli compagnon)
+        if: matrix.variante == 'montre'
+        run: |
+          PBX=$(ls -d ios/*.xcodeproj | head -1)/project.pbxproj
+          sed -i '' -E "s/(INFOPLIST_KEY_WKCompanionAppBundleIdentifier = )[^;]*;/\"fr.noem.noemia.$NOEMIA_EQUIPE\";/" "$PBX"
+          grep -n "WKCompanionAppBundleIdentifier" "$PBX"
 
       - name: Compilation (sans signature)
         run: |
@@ -68,7 +79,7 @@ jobs:
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/*.app Payload/
           VERSION=$(node -p "require('./app.json').expo.version")
-          SUFFIX=$([ "$NOEMIA_VARIANTE" = "complet" ] && echo "-complet" || echo "")
+          SUFFIX=$([ "$NOEMIA_VARIANTE" = "standard" ] && echo "" || echo "-$NOEMIA_VARIANTE")
           zip -qr "NOEMIA$SUFFIX-$VERSION.ipa" Payload
           ls -lh *.ipa
 
