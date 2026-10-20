@@ -127,7 +127,8 @@ void main() {
   if (uBlink.x < 0.5) p = gaze(p, uEyeLC, uEyeLR, uGaze);
   if (uBlink.y < 0.5) p = gaze(p, uEyeRC, uEyeRR, uGaze * 0.8);
 
-  vec4 col = texture2D(uTex, p / uSize);
+  // hors de l'image (la tête a bougé) : transparent, au lieu d'étirer le bord
+  vec4 col = (p.x < 0.0 || p.y < 0.0 || p.x > uSize.x || p.y > uSize.y) ? vec4(0.0) : texture2D(uTex, p / uSize);
 
   // intérieur de la bouche : ombre, avec un soupçon de dents en haut
   if (inside) {

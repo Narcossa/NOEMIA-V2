@@ -32,6 +32,7 @@ Comment tu parles — tes réponses sont lues à voix haute :
 - Va à l'essentiel : une à trois phrases, sauf quand on te demande de lire ou résumer quelque chose.
 - Dis les heures comme on les dit (« quatorze heures trente », « demain matin »).
 - Commence TOUJOURS ta réponse par ton expression entre crochets, parmi : [neutre] [sourire] [joie] [amusee] [concentration] [inquietude] [surprise]. Exemple : « [sourire] C'est noté. »
+- Avant d'aller chercher une information (agenda, emails…), dis d'abord une très courte phrase naturelle (« Je regarde ça. », « Une seconde, je vérifie ton agenda. »), puis utilise l'outil : la conversation reste vivante pendant que tu travailles.
 
 Comment tu agis :
 - L'utilisateur ne nomme jamais d'outil : c'est toi qui choisis (agenda, tâches, emails, contacts, mémoire, téléphone).
@@ -71,6 +72,12 @@ export const resetConversation = (userId: number) => run("DELETE FROM conversati
 
 export type TurnResult = { reply: string; emotion: string; cards: Card[]; phone: PhoneAction[] };
 
+// Événements diffusés à l'appli pendant que NOÉMIA réfléchit et parle
+export type TurnEvent =
+  | { type: "emotion"; name: string }
+  | { type: "text"; text: string }
+  | { type: "status"; tool: string };
+
 function stamp(tz: string) {
   const d = new Date();
   const day = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: tz });
@@ -79,7 +86,33 @@ function stamp(tz: string) {
   return `[${day}, ${time} — heure locale ${iso}, fuseau ${tz}]`;
 }
 
-export async function turn(userId: number, text: string, tz: string): Promise<TurnResult> {
+// Retire les balises d'expression « [sourire] » du flux de texte et les signale à part
+function tagFilter(emit: (e: TurnEvent) => void) {
+  let buf = "";
+  let firstEmotion: string | null = null;
+  const flushText = (t: string) => { if (t) emit({ type: "text", text: t }); };
+  return {
+    push(delta: string) {
+      buf += delta;
+      while (buf) {
+        const i = buf.indexOf("[");
+        if (i === -1) { flushText(buf); buf = ""; return; }
+        if (i > 0) { flushText(buf.slice(0, i)); buf = buf.slice(i); }
+        const j = buf.indexOf("]");
+        if (j === -1) { if (buf.length > 24) { flushText(buf); buf = ""; } return; }
+        const tag = buf.slice(1, j).toLowerCase();
+        if ((EMOTIONS as readonly string[]).includes(tag)) {
+          firstEmotion ??= tag;
+          emit({ type: "emotion", name: tag });
+          buf = buf.slice(j + 1).replace(/^\s+/, "");
+        } else { flushText(buf.slice(0, j + 1)); buf = buf.slice(j + 1); }
+      }
+    },
+    end() { flushText(buf); buf = ""; return firstEmotion; },
+  };
+}
+
+export async function turn(userId: number, text: string, tz: string, emit: (e: TurnEvent) => void = () => {}): Promise<TurnResult> {
   const ctx: Ctx = { userId, tz, cards: [], phone: [] };
   const messages = loadConversation(userId);
   messages.push({ role: "user", content: `${stamp(tz)}\n${text}` });
@@ -90,9 +123,15 @@ export async function turn(userId: number, text: string, tz: string): Promise<Tu
     { type: "text", text: profileBlock(userId) },
   ];
 
-  let reply = "";
+  let spoken = "";
+  let emotion: string | null = null;
+  const filter = tagFilter(e => {
+    if (e.type === "text") spoken += e.text;
+    emit(e);
+  });
+
   for (let step = 0; step < 10; step++) {
-    const response = await client.messages.create({
+    const stream = client.messages.stream({
       model: config.anthropicModel,
       max_tokens: 4000,
       output_config: { effort: "low" },
@@ -101,17 +140,21 @@ export async function turn(userId: number, text: string, tz: string): Promise<Tu
       tools: DEFS,
       messages,
     });
+    stream.on("text", delta => filter.push(delta));
+    const response = await stream.finalMessage();
+    emotion ??= filter.end();
+    if (spoken && !/\s$/.test(spoken)) { spoken += " "; emit({ type: "text", text: " " }); }
     messages.push({ role: "assistant", content: response.content });
 
-    if (response.stop_reason === "refusal") { reply = "[inquietude] Je préfère ne pas faire ça."; break; }
+    if (response.stop_reason === "refusal") { const r = "Je préfère ne pas faire ça."; spoken += r; emit({ type: "text", text: r }); break; }
     if (response.stop_reason === "pause_turn") continue;
 
     const uses = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-    reply = response.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map(b => b.text).join(" ").trim();
     if (!uses.length || response.stop_reason === "max_tokens") break;
 
     const results: Anthropic.ToolResultBlockParam[] = [];
     for (const u of uses) {
+      emit({ type: "status", tool: u.name });
       const t = BY_NAME.get(u.name);
       try {
         if (!t) throw new Error(`Outil inconnu : ${u.name}`);
@@ -126,10 +169,8 @@ export async function turn(userId: number, text: string, tz: string): Promise<Tu
   }
 
   saveConversation(userId, messages);
-
-  const m = reply.match(/^\s*\[([a-zéè]+)\]\s*/i);
-  const emotion = m && (EMOTIONS as readonly string[]).includes(m[1].toLowerCase()) ? m[1].toLowerCase() : "neutre";
-  const clean = (m ? reply.slice(m[0].length) : reply).replace(/\[[a-z]+\]\s*/gi, "").trim() || "C'est fait.";
+  const clean = spoken.replace(/\s+/g, " ").trim() || "C'est fait.";
+  if (!spoken.trim()) emit({ type: "text", text: clean });
   run("INSERT INTO log (user_id, role, text) VALUES (?, 'noemia', ?)", userId, clean);
-  return { reply: clean, emotion, cards: ctx.cards, phone: ctx.phone };
+  return { reply: clean, emotion: emotion ?? "neutre", cards: ctx.cards, phone: ctx.phone };
 }

@@ -2,6 +2,8 @@
 import { NoemiaRenderer } from "./renderer.js";
 import { Life, HALO_STATES, EMOTION_NAMES } from "./life.js";
 import { Voice, onVoicesReady } from "./voice.js";
+import { Backdrop, headOnScreen } from "./backdrop.js";
+import { IMAGE, RIG } from "./rig.js";
 
 const $ = s => document.querySelector(s);
 const store = {
@@ -27,10 +29,12 @@ try {
   renderer.load().catch(showError);
 } catch (err) { showError(err); }
 
+const backdrop = new Backdrop($("#backdrop"));
 let last = performance.now();
 function frame(now) {
   const dt = (now - last) / 1000; last = now;
   const s = life.update(dt);
+  backdrop.draw(s, life.t, dt, headOnScreen($("#avatar"), RIG, IMAGE));
   renderer?.draw(s, life.t);
   requestAnimationFrame(frame);
 }

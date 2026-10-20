@@ -2,6 +2,7 @@
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import { getCalendars } from "expo-localization";
+import { fetch as streamFetch } from "expo/fetch";
 
 export const API_URL = "https://vps-1d994dff.vps.ovh.ca";
 const REDIRECT = "noemia://auth";
@@ -85,3 +86,49 @@ export async function linkGoogleAccount(): Promise<string | null> {
   if (params.get("error")) throw new Error(params.get("error")!);
   return params.get("linked");
 }
+
+// --- Réponse diffusée au fil de l'eau ------------------------------------------
+
+export type StreamEvent =
+  | { type: "emotion"; name: string }
+  | { type: "text"; text: string }
+  | { type: "status"; tool: string }
+  | { type: "done"; emotion: string; cards: Card[]; phone: PhoneAction[]; reply: string }
+  | { type: "error"; message: string };
+
+function utf8(bytes: Uint8Array): string {
+  if (typeof TextDecoder !== "undefined") return new TextDecoder().decode(bytes, { stream: true } as any);
+  let s = ""; for (const b of bytes) s += String.fromCharCode(b);
+  return decodeURIComponent(escape(s));
+}
+
+async function streamCall(path: string, body: object, onEvent: (e: StreamEvent) => void, signal?: AbortSignal) {
+  const token = await getToken();
+  if (!token) throw new AuthError("Non connecté");
+  const res = await streamFetch(API_URL + path, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ ...body, tz: timezone() }),
+    signal,
+  });
+  if (res.status === 401) { await clearToken(); throw new AuthError("Session expirée"); }
+  if (!res.ok || !res.body) throw new Error(`Erreur serveur (${res.status})`);
+  const reader = res.body.getReader();
+  const decoder = typeof TextDecoder !== "undefined" ? new TextDecoder() : null;
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder ? decoder.decode(value, { stream: true }) : utf8(value);
+    let nl;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+      if (line) { try { onEvent(JSON.parse(line)); } catch {} }
+    }
+  }
+}
+
+export const chatStream = (text: string, onEvent: (e: StreamEvent) => void, signal?: AbortSignal) =>
+  streamCall("/api/chat/stream", { text }, onEvent, signal);
+export const briefingStream = (kind: "matin" | "soir", onEvent: (e: StreamEvent) => void, signal?: AbortSignal) =>
+  streamCall("/api/briefing/stream", { kind }, onEvent, signal);

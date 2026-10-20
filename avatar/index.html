@@ -21,6 +21,7 @@ body{min-height:100dvh;overflow:hidden}
 .stage{position:fixed;inset:0;background:radial-gradient(70% 55% at 55% 35%,var(--bg2),var(--bg) 70%);transition:background .6s}
 .stage::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(40% 30% at 35% 30%,var(--halo-glow),transparent 70%);opacity:.35}
 /* Téléphone (portrait) : NOÉMIA en grand, cadrée sur le visage ; écran large : buste entier */
+#backdrop{position:fixed;inset:0;width:100%;height:100%}
 #avatar{position:absolute;left:50%;bottom:0;transform:translateX(-61%);height:86dvh;aspect-ratio:862/1146;max-width:none}
 @media (min-aspect-ratio:3/4){#avatar{height:94dvh;transform:translateX(-50%)}}
 
@@ -73,6 +74,7 @@ label.small{font-size:13px;color:var(--muted);display:flex;justify-content:space
 </style>
 
 <div class="stage" aria-hidden="true"></div>
+<canvas id="backdrop" aria-hidden="true"></canvas>
 <canvas id="avatar" role="img" aria-label="NOÉMIA, humanoïde animé"></canvas>
 
 <div class="top">

@@ -8,5 +8,8 @@ vps-1d994dff.vps.ovh.ca {
 		Referrer-Policy "no-referrer"
 		-Server
 	}
-	reverse_proxy 127.0.0.1:8787
+	# flush_interval -1 : les réponses de NOÉMIA sont transmises au fil de l'eau
+	reverse_proxy 127.0.0.1:8787 {
+		flush_interval -1
+	}
 }

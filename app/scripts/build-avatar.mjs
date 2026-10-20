@@ -15,7 +15,7 @@ const strip = src => src
   .map(l => l.replace(/^export\s+(?=(const|function|class|let|async))/, ""))
   .join("\n");
 
-const modules = ["rig.js", "lipsync-fr.js", "renderer.js", "life.js"]
+const modules = ["rig.js", "lipsync-fr.js", "renderer.js", "life.js", "backdrop.js"]
   .map(f => `// ---- ${f}\n${strip(readFileSync(join(avatar, "src", f), "utf8"))}`)
   .join("\n\n");
 
@@ -25,12 +25,15 @@ const bridge = `
 // ---- pont avec l'appli React Native
 const life = new Life();
 const renderer = new NoemiaRenderer(document.getElementById("avatar"));
+const backdrop = new Backdrop(document.getElementById("backdrop"));
 const post = m => window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(m));
 renderer.load(${JSON.stringify(image)}).then(() => post({ type: "ready" })).catch(e => post({ type: "error", message: e.message }));
 let last = performance.now();
 (function frame(now) {
   const dt = (now - last) / 1000; last = now;
-  renderer.draw(life.update(dt), life.t);
+  const s = life.update(dt);
+  backdrop.draw(s, life.t, dt, headOnScreen(document.getElementById("avatar"), RIG, IMAGE));
+  renderer.draw(s, life.t);
   requestAnimationFrame(frame);
 })(last);
 
@@ -69,9 +72,10 @@ const html = `<!doctype html><html data-daylight="jour"><head><meta charset="utf
 html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);-webkit-user-select:none;user-select:none}
 .stage{position:fixed;inset:0;background:radial-gradient(70% 55% at 55% 35%,var(--bg2),var(--bg) 70%);transition:background .6s}
 .stage::after{content:"";position:absolute;inset:0;background:radial-gradient(40% 30% at 35% 30%,var(--glow),transparent 70%);opacity:.35}
+#backdrop{position:fixed;inset:0;width:100%;height:100%}
 #avatar{position:absolute;left:50%;bottom:0;transform:translateX(-61%);height:86vh;aspect-ratio:862/1146}
 @media (min-aspect-ratio:3/4){#avatar{height:94vh;transform:translateX(-50%)}}
-</style></head><body><div class="stage"></div><canvas id="avatar"></canvas>
+</style></head><body><canvas id="backdrop"></canvas><canvas id="avatar"></canvas>
 <script>
 (function(){
 ${modules}

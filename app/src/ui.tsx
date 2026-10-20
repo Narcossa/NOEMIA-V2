@@ -20,12 +20,13 @@ export const ProfileIcon = ({ color }: { color: string }) => (
 
 export type Phase = "repos" | "ecoute" | "reflexion" | "parole";
 
-export function MicButton({ phase, onPress, c }: { phase: Phase; onPress: () => void; c: Palette }) {
+export function MicButton({ phase, onPress, onLongPress, c }: { phase: Phase; onPress: () => void; onLongPress?: () => void; c: Palette }) {
   const label = phase === "ecoute" ? "Arrêter l'écoute" : phase === "parole" ? "Interrompre NOÉMIA" : "Parler à NOÉMIA";
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} disabled={phase === "reflexion"}
+    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={600} accessibilityRole="button" accessibilityLabel={label}
+      accessibilityHint="Appui long pour terminer la conversation"
       style={({ pressed }) => [s.mic, { borderColor: c.halo, backgroundColor: c.btn, shadowColor: c.halo,
-        shadowRadius: phase === "ecoute" ? 26 : 14, transform: [{ scale: pressed ? 0.95 : 1 }], opacity: phase === "reflexion" ? 0.6 : 1 }]}>
+        shadowRadius: phase === "ecoute" ? 26 : 14, transform: [{ scale: pressed ? 0.95 : 1 }], opacity: phase === "reflexion" ? 0.7 : 1 }]}>
       {phase === "parole" ? <StopIcon color={c.btnInk} /> : <MicIcon color={c.btnInk} />}
     </Pressable>
   );

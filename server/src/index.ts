@@ -111,6 +111,32 @@ app.post("/api/chat", async req => {
   return turn(uid(req), text.trim().slice(0, 4000), tz || config.defaultTimezone);
 });
 
+// Version diffusée : une ligne JSON par événement (texte au fil de l'eau, expression, outil en cours),
+// pour que l'appli commence à parler dès la première phrase.
+async function streamTurn(req: FastifyRequest, reply: any, text: string, tz: string) {
+  reply.hijack();
+  reply.raw.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-cache", "x-accel-buffering": "no" });
+  const send = (o: object) => reply.raw.write(JSON.stringify(o) + "\n");
+  try {
+    const r = await turn(uid(req), text, tz, send);
+    send({ type: "done", emotion: r.emotion, cards: r.cards, phone: r.phone, reply: r.reply });
+  } catch (err: any) {
+    req.log.error(err);
+    send({ type: "error", message: "NOÉMIA a rencontré un problème technique. Réessaie dans un instant." });
+  }
+  reply.raw.end();
+}
+
+app.post("/api/chat/stream", async (req, reply) => {
+  const { text, tz } = req.body as { text: string; tz?: string };
+  return streamTurn(req, reply, (text ?? "").trim().slice(0, 4000) || "…", tz || config.defaultTimezone);
+});
+
+app.post("/api/briefing/stream", async (req, reply) => {
+  const { kind, tz } = req.body as { kind: "matin" | "soir"; tz?: string };
+  return streamTurn(req, reply, kind === "soir" ? BILAN : BRIEFING, tz || config.defaultTimezone);
+});
+
 app.post("/api/reset", async req => { resetConversation(uid(req)); return { ok: true }; });
 
 app.get("/api/history", async req => {
@@ -158,12 +184,11 @@ app.get("/api/urgent", async req => {
 });
 
 // Briefing du matin et bilan du soir : NOÉMIA les prépare comme une réponse normale
+const BRIEFING = "Fais-moi mon briefing du matin : les rendez-vous du jour, les emails importants non lus et les tâches qui arrivent à échéance. Reste bref.";
+const BILAN = "Fais-moi le bilan de la journée : ce qui s'est passé dans l'agenda, les emails importants restés sans réponse, et ce qui m'attend demain. Reste bref.";
 app.post("/api/briefing", async req => {
   const { kind, tz } = req.body as { kind: "matin" | "soir"; tz?: string };
-  const prompt = kind === "soir"
-    ? "Fais-moi le bilan de la journée : ce qui s'est passé dans l'agenda, les emails importants restés sans réponse, et ce qui m'attend demain. Reste bref."
-    : "Fais-moi mon briefing du matin : les rendez-vous du jour, les emails importants non lus et les tâches qui arrivent à échéance. Reste bref.";
-  return turn(uid(req), prompt, tz || config.defaultTimezone);
+  return turn(uid(req), kind === "soir" ? BILAN : BRIEFING, tz || config.defaultTimezone);
 });
 
 app.setErrorHandler((err, req, reply) => {
