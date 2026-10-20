@@ -1,0 +1,395 @@
+<title>Dossier NOÉMIA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout : document à colonne de lecture, sommaire collant en haut, planches d'écrans iPhone en grille qui se replie */
+:root{
+  --bg:#EEF1F5; --surface:#FFFFFF; --ink:#141922; --muted:#5B6474; --line:#D4DAE3;
+  --halo:#1F6FFF; --halo-soft:#E3ECFF; --amber:#B86E00; --ok:#16855A;
+  --phone:#0D1016; --phone-ink:#E8ECF2; --phone-muted:#8D97A8;
+  --display:"Jost","Avenir Next","Segoe UI",sans-serif;
+  --body:"Figtree","Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E1117; --surface:#161A22; --ink:#E8ECF2; --muted:#98A2B3; --line:#29303B;
+  --halo:#4E92FF; --halo-soft:#15223B; --amber:#E39B2E; --ok:#3CC48A; --phone:#05070A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1117; --surface:#161A22; --ink:#E8ECF2; --muted:#98A2B3; --line:#29303B;
+  --halo:#4E92FF; --halo-soft:#15223B; --amber:#E39B2E; --ok:#3CC48A; --phone:#05070A; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 var(--body);margin:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+.wrap{max-width:900px;margin:0 auto}
+.read{max-width:68ch}
+
+.cover{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:24px;align-items:end;padding-block:40px 24px;border-bottom:1px solid var(--line)}
+.cover img{width:100%;max-width:200px;justify-self:end;filter:drop-shadow(0 10px 30px color-mix(in srgb,var(--halo) 25%,transparent))}
+.eyebrow{font:500 12px var(--display);letter-spacing:.22em;text-transform:uppercase;color:var(--halo)}
+h1{font:300 clamp(40px,8vw,64px)/1 var(--display);letter-spacing:.06em;margin:8px 0 12px}
+.cover p{margin:0;color:var(--muted);max-width:52ch}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:16px;font-size:13.5px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+@media (max-width:560px){.cover{grid-template-columns:1fr}.cover img{justify-self:start;max-width:140px;order:-1}}
+
+nav.toc{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);display:flex;gap:4px;overflow-x:auto;padding-block:10px;border-bottom:1px solid var(--line);scrollbar-width:none}
+nav.toc a{flex:none;color:var(--muted);text-decoration:none;font-size:14px;padding:6px 10px;border-radius:6px}
+nav.toc a:hover,nav.toc a:focus-visible{color:var(--ink);background:var(--surface);outline:none}
+
+section{padding-block:40px 8px}
+h2{font:400 30px/1.15 var(--display);margin:6px 0 14px;text-wrap:balance}
+h3{font:500 18px/1.3 var(--body);margin:28px 0 8px}
+p{margin:0 0 12px}
+.lead{font-size:17.5px;color:var(--muted)}
+ul.clean{margin:0 0 12px;padding-left:20px;display:grid;gap:6px}
+
+.tbl{overflow-x:auto;margin:12px 0 18px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:560px}
+th,td{text-align:left;padding:10px 12px;border-top:1px solid var(--line);vertical-align:top}
+thead th{border-top:0;font:500 12px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+tr.total td{font-weight:600}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.p-ok{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.p-mid{background:color-mix(in srgb,var(--amber) 15%,transparent);color:var(--amber)}
+.p-no{background:color-mix(in srgb,var(--muted) 15%,transparent);color:var(--muted)}
+
+.callout{border:1px solid var(--line);border-left:3px solid var(--halo);background:var(--surface);border-radius:6px;padding:14px 16px;margin:14px 0}
+.callout.warn{border-left-color:var(--amber)}
+.callout strong:first-child{display:block;margin-bottom:4px}
+
+/* Schéma d'architecture */
+.arch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:16px 0;position:relative}
+.node{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+.node h4{margin:0 0 2px;font:500 13px var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--halo)}
+.node .where{font-size:12.5px;color:var(--muted);margin-bottom:8px}
+.node ul{margin:0;padding-left:18px;font-size:14px;display:grid;gap:4px}
+.flow{grid-column:1/-1;font:13px/1.6 var(--mono);color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;white-space:pre}
+@media (max-width:720px){.arch{grid-template-columns:1fr}}
+
+/* Planches d'écrans */
+.screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:22px;margin-top:18px}
+.screen figcaption{font-size:14px;margin-top:10px}
+.screen figcaption b{display:block;font-weight:500}
+.screen figcaption span{color:var(--muted);font-size:13px}
+figure{margin:0}
+.phone{position:relative;aspect-ratio:9/19.5;max-width:250px;width:100%;margin:0 auto;border-radius:34px;background:var(--phone);border:6px solid #22262E;overflow:hidden;color:var(--phone-ink);font-size:11px;box-shadow:0 12px 40px rgba(10,20,40,.18)}
+.phone .island{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:34%;height:18px;border-radius:12px;background:#000;z-index:3}
+.phone .sb{position:absolute;top:9px;left:16px;right:16px;display:flex;justify-content:space-between;font:600 10px var(--body);z-index:2}
+.phone .glow{position:absolute;inset:0;background:radial-gradient(60% 40% at 50% 38%,rgba(78,146,255,.18),transparent 70%)}
+.phone img.av{position:absolute;left:50%;transform:translateX(-50%);bottom:24%;width:118%;max-width:none}
+.phone.close img.av{width:150%;bottom:12%}
+.prof{position:absolute;top:36px;right:14px;width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.25);display:grid;place-items:center;z-index:2}
+.prof::after{content:"";width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.6);box-shadow:0 9px 0 -2px rgba(255,255,255,.6)}
+.mic{position:absolute;bottom:7%;left:50%;transform:translateX(-50%);width:58px;height:58px;border-radius:50%;background:#10141C;border:2px solid #4E92FF;box-shadow:0 0 18px rgba(78,146,255,.7),inset 0 0 10px rgba(78,146,255,.4);display:grid;place-items:center;z-index:2}
+.mic i{width:12px;height:20px;border-radius:7px;border:2px solid #CFE0FF}
+.mic.live{box-shadow:0 0 0 8px rgba(78,146,255,.18),0 0 0 16px rgba(78,146,255,.08),0 0 26px rgba(78,146,255,.9)}
+@media (prefers-reduced-motion:no-preference){.mic.live{animation:pulse 1.8s ease-in-out infinite}}
+@keyframes pulse{50%{box-shadow:0 0 0 12px rgba(78,146,255,.12),0 0 0 24px rgba(78,146,255,.04),0 0 30px rgba(78,146,255,1)}}
+.sub{position:absolute;left:14px;right:14px;bottom:22%;text-align:center;font-size:11.5px;line-height:1.45;z-index:2;text-shadow:0 1px 6px #000}
+.sub .you{color:var(--phone-muted);display:block;margin-bottom:4px;font-style:italic}
+.state{position:absolute;top:38px;left:14px;font:500 9px var(--display);letter-spacing:.18em;text-transform:uppercase;color:#9CC0FF;z-index:2}
+.card{position:absolute;left:12px;right:12px;bottom:18%;background:rgba(22,27,36,.92);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;z-index:2;backdrop-filter:blur(6px)}
+.card .k{font:500 8.5px var(--display);letter-spacing:.16em;text-transform:uppercase;color:#9CC0FF}
+.card .t{font-weight:600;font-size:12px;margin:3px 0}
+.card .b{color:#B9C2D0;font-size:10.5px;line-height:1.45}
+.card .acts{display:flex;gap:6px;margin-top:9px}
+.card .acts span{flex:1;text-align:center;padding:6px;border-radius:8px;font-weight:600;font-size:10.5px;border:1px solid rgba(255,255,255,.15)}
+.card .acts span.go{background:#4E92FF;border-color:#4E92FF;color:#fff}
+.welcome{position:absolute;left:0;right:0;bottom:7%;text-align:center;z-index:2;padding:0 16px}
+.welcome .hi{font:300 17px var(--display);letter-spacing:.05em;margin-bottom:4px}
+.welcome .s{color:var(--phone-muted);font-size:10.5px;margin-bottom:12px}
+.gbtn{display:inline-flex;gap:7px;align-items:center;background:#fff;color:#1F1F1F;border-radius:20px;padding:8px 14px;font-weight:600;font-size:11px}
+.gbtn b{font:700 13px var(--body);color:#4285F4}
+.panel{position:absolute;inset:0;background:#10141B;padding:44px 14px 14px;overflow:hidden}
+.panel .h{font:400 16px var(--display);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.panel .h small{font:500 9px var(--body);color:#9CC0FF}
+.grp{font:500 8.5px var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--phone-muted);margin:12px 0 5px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.07);font-size:11px}
+.row em{font-style:normal;color:var(--phone-muted);font-size:10px}
+.tg{width:24px;height:14px;border-radius:8px;background:#4E92FF;position:relative}
+.tg::after{content:"";position:absolute;right:2px;top:2px;width:10px;height:10px;border-radius:50%;background:#fff}
+.tg.off{background:#39404C}.tg.off::after{right:auto;left:2px}
+.lock{position:absolute;inset:0;background:linear-gradient(170deg,#1B2333,#0B0E14)}
+.lock .time{text-align:center;margin-top:52px;font:200 46px var(--display)}
+.lock .date{text-align:center;color:#C9D3E3;font-size:11px}
+.notif{position:absolute;left:10px;right:10px;top:46%;background:rgba(255,255,255,.14);backdrop-filter:blur(10px);border-radius:14px;padding:10px;font-size:10.5px;line-height:1.4}
+.notif .app{display:flex;gap:6px;align-items:center;font-weight:600;margin-bottom:3px}
+.notif .app i{width:15px;height:15px;border-radius:4px;background:radial-gradient(circle at 50% 50%,#CFE0FF 0 25%,#4E92FF 26% 45%,#10141C 46%)}
+.notif .app em{margin-left:auto;font-style:normal;font-weight:400;color:#B8C2D2}
+
+.halos{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin:12px 0}
+.halo-st{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:center;font-size:13.5px}
+.halo-st i{width:26px;height:26px;border-radius:50%;border:3px solid var(--halo)}
+.halo-st b{display:block;font-weight:500}
+.halo-st span{color:var(--muted);font-size:12.5px}
+
+.road{display:grid;gap:12px;margin-top:14px}
+.step{display:grid;grid-template-columns:110px minmax(0,1fr);gap:16px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.step .when{font:500 13px var(--display);letter-spacing:.06em;color:var(--halo)}
+.step .when small{display:block;color:var(--muted);font:400 12.5px var(--body);letter-spacing:0;margin-top:2px}
+.step h4{margin:0 0 6px;font:500 16.5px var(--body)}
+.step ul{margin:0;padding-left:18px;font-size:14.5px;display:grid;gap:3px}
+.step .done{font-size:13px;color:var(--muted);margin-top:8px}
+@media (max-width:560px){.step{grid-template-columns:1fr;gap:6px}}
+
+.q-open{counter-reset:q;display:grid;gap:10px;padding:0;list-style:none}
+.q-open li{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px 12px 46px;position:relative;font-size:15px}
+.q-open li::before{counter-increment:q;content:counter(q);position:absolute;left:14px;top:12px;width:22px;height:22px;border-radius:50%;background:var(--halo-soft);color:var(--halo);font:600 12px var(--body);display:grid;place-items:center}
+.q-open li span{display:block;color:var(--muted);font-size:13.5px;margin-top:2px}
+code{font:13.5px var(--mono);background:var(--halo-soft);padding:1px 5px;border-radius:4px}
+a{color:var(--halo)}
+</style>
+
+<div class="wrap">
+  <header class="cover">
+    <div>
+      <div class="eyebrow">NOEM · Dossier de conception · V1</div>
+      <h1>NOÉMIA</h1>
+      <p>Compagnon vocal de gestion du quotidien, perso et pro. NOÉMIA est un humanoïde animé qui écoute, comprend et agit sur l'iPhone et les outils Google de la famille.</p>
+      <div class="meta"><span>Date <b>20 octobre 2026</b></span><span>Plateforme <b>iPhone</b></span><span>Formule <b>Éco, ≈ 10 €/mois</b></span><span>Statut <b>À valider</b></span></div>
+    </div>
+    <img src="assets/noemia.webp" alt="Buste de NOÉMIA, humanoïde blanc et noir au halo bleu, logo NOEm sur le torse">
+  </header>
+
+  <nav class="toc" aria-label="Sommaire">
+    <a href="#vision">Vision</a><a href="#fonctions">Fonctionnalités</a><a href="#ecrans">Écrans</a><a href="#archi">Architecture</a><a href="#couts">Coûts</a><a href="#route">Feuille de route</a><a href="#ouvert">À trancher</a>
+  </nav>
+
+  <section id="vision">
+    <div class="eyebrow">1 · Vision</div>
+    <h2>Qui est NOÉMIA</h2>
+    <div class="read">
+      <p class="lead">Une majordome stricte et efficace, à la fois féminine et apaisante. Mathis l'a créée, et elle vit avec la famille comme Sonny dans <i>I, Robot</i>.</p>
+      <ul class="clean">
+        <li><b>Ton :</b> elle tutoie, parle français, a de l'humour. Elle peut contredire et recadrer avec bienveillance (« Tu m'avais dit pas de café après 16h… »).</li>
+        <li><b>Origine :</b> elle sait qu'elle est la création de Mathis, mais n'en parle que si on lui demande.</li>
+        <li><b>Principe clé :</b> on ne nomme jamais d'outil. « Rappelle-moi d'acheter du lait » suffit, NOÉMIA choisit Tasks, Agenda ou Gmail toute seule.</li>
+        <li><b>Utilisateurs :</b> Mathis et sa famille. Chacun se connecte avec son propre compte Google, ce qui sépare la mémoire, les emails et l'agenda de chacun.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="fonctions">
+    <div class="eyebrow">2 · Cahier des charges</div>
+    <h2>Ce que NOÉMIA fait</h2>
+
+    <h3>Conversation</h3>
+    <ul class="clean read">
+      <li>L'échange se lance avec le bouton central. C'est du tour par tour : elle écoute, réfléchit puis répond.</li>
+      <li>Elle comprend les demandes en plusieurs étapes. Par exemple : « Prépare ma réunion de 15h : résume les mails de l'équipe, mets un rappel, écris à Sophie. »</li>
+      <li>Si un détail manque, elle demande une précision (« À quelle heure ? »).</li>
+      <li>Tout ce qu'elle dit est sous-titré à l'écran. Les emails sont lus <em>et</em> affichés.</li>
+    </ul>
+
+    <h3>Actions et niveau de confirmation</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>Domaine</th><th>Exemples de demandes</th><th>Confirmation</th><th>V1</th></tr></thead>
+      <tbody>
+        <tr><td>Agenda</td><td>« Qu'est-ce que j'ai demain ? » · « Bloque 14h-16h pour un brainstorming » · agenda familial partagé</td><td>Lecture : aucune · Création/modif : orale</td><td><span class="pill p-ok">Oui</span></td></tr>
+        <tr><td>Tâches et listes</td><td>« Ajoute du lait aux courses » · « Quels sont mes délais ? »</td><td>Orale</td><td><span class="pill p-ok">Oui</span></td></tr>
+        <tr><td>Emails</td><td>« Résume mes mails non lus » · « Réponds au client X qu'on reporte à demain 11h »</td><td>Envoi : orale, après lecture et affichage du brouillon</td><td><span class="pill p-ok">Oui</span></td></tr>
+        <tr><td>Mémoire</td><td>« Note que j'ai prêté 20 € à Paul » · « Qu'est-ce que j'ai dit sur le projet X hier ? » · « Oublie ça »</td><td>Aucune</td><td><span class="pill p-ok">Oui</span></td></tr>
+        <tr><td>Web</td><td>Horaires de cinéma, actualités, itinéraire et temps de trajet</td><td>Aucune</td><td><span class="pill p-mid">V1.1</span></td></tr>
+        <tr><td>Réservations</td><td>« Trouve un resto italien ce soir » : elle propose, puis ouvre la page de réservation ou appelle</td><td>Orale</td><td><span class="pill p-mid">V1.1</span></td></tr>
+        <tr><td>SMS et appels</td><td>« Dis à Pierre que je suis en retard » · « Appelle Maman »</td><td>Orale + appui sur Envoyer ou Appeler (règle Apple)</td><td><span class="pill p-mid">V1.1</span></td></tr>
+        <tr><td>WhatsApp</td><td>Elle rédige le message et ouvre la conversation, tu appuies sur Envoyer</td><td>Appui sur Envoyer</td><td><span class="pill p-mid">V1.1</span></td></tr>
+        <tr><td>Spotify</td><td>« Lance ma playlist Focus »</td><td>Aucune</td><td><span class="pill p-mid">V1.1</span></td></tr>
+        <tr><td>Réglages du téléphone</td><td>Alarme, minuteur, mode Concentration, silencieux</td><td>Via un pack de Raccourcis installé une fois</td><td><span class="pill p-mid">V1.1</span></td></tr>
+        <tr><td>Suppression</td><td>« Supprime l'événement de jeudi »</td><td>Orale, avec rappel de ce qui sera supprimé</td><td><span class="pill p-ok">Oui</span></td></tr>
+        <tr><td>Paiement, virement</td><td>NOÉMIA ne paie jamais et ne touche pas à la banque</td><td>Interdit</td><td><span class="pill p-no">Non</span></td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Proactivité</h3>
+    <ul class="clean read">
+      <li><b>Briefing du matin :</b> agenda, météo, emails importants, premier trajet.</li>
+      <li><b>Rappel avant chaque réunion</b> (délai par défaut : 10 min, réglable).</li>
+      <li><b>Alerte email urgent :</b> NOÉMIA juge l'urgence d'après l'expéditeur, le sujet et l'historique.</li>
+      <li><b>Bilan du soir :</b> ce qui a été fait, ce qui reste à faire demain.</li>
+      <li><b>Habitudes :</b> elle les apprend au fil du temps (« Le mardi tu pars à 8h, il y a des bouchons »).</li>
+      <li>Quand l'application est fermée, tout arrive en <b>notification simple</b>. NOÉMIA ne parle jamais d'elle-même hors de l'appli. Les heures de silence se règlent dans le profil.</li>
+    </ul>
+  </section>
+
+  <section id="ecrans">
+    <div class="eyebrow">3 · Navigation</div>
+    <h2>Les écrans</h2>
+    <p class="read">L'application tient en deux écrans : NOÉMIA plein écran, et le profil. Tout le reste passe par la voix et par des cartes temporaires qui s'affichent par-dessus l'avatar.</p>
+
+    <div class="screens">
+      <figure class="screen">
+        <div class="phone"><div class="island"></div><div class="sb"><span>9:41</span><span>●●●</span></div><div class="glow"></div>
+          <img class="av" src="assets/noemia.webp" alt="">
+          <div class="welcome"><div class="hi">Bonjour. Je suis NOÉMIA.</div><div class="s">Mathis m'a créée pour veiller sur ton quotidien.<br>Faisons connaissance.</div><span class="gbtn"><b>G</b>Continuer avec Google</span></div>
+        </div>
+        <figcaption><b>1 · Première rencontre</b><span>Elle s'éveille : son halo s'allume, elle ouvre les yeux puis parle. Connexion Google, puis elle pose 3 questions pour faire connaissance.</span></figcaption>
+      </figure>
+
+      <figure class="screen">
+        <div class="phone"><div class="island"></div><div class="sb"><span>9:41</span><span>●●●</span></div><div class="glow"></div>
+          <div class="prof" aria-hidden="true"></div>
+          <img class="av" src="assets/noemia.webp" alt="">
+          <div class="mic"><i></i></div>
+        </div>
+        <figcaption><b>2 · Accueil, au repos</b><span>NOÉMIA respire, cligne des yeux et bouge légèrement la tête. Un seul bouton, et l'icône du profil en haut à droite.</span></figcaption>
+      </figure>
+
+      <figure class="screen">
+        <div class="phone"><div class="island"></div><div class="sb"><span>9:41</span><span>●●●</span></div><div class="glow"></div>
+          <div class="state">● À l'écoute</div><div class="prof" aria-hidden="true"></div>
+          <img class="av" src="assets/noemia.webp" alt="">
+          <div class="sub"><span class="you">« Qu'est-ce que j'ai cet après-midi ? »</span>Deux choses : le point chantier Dubreuil à 14h, puis Sophie à 16h30. Tu veux que je lui confirme ?</div>
+          <div class="mic live"><i></i></div>
+        </div>
+        <figcaption><b>3 · Conversation</b><span>Le halo pulse pendant l'écoute. Sous-titres en direct, synchronisation des lèvres et expressions selon le contexte.</span></figcaption>
+      </figure>
+
+      <figure class="screen">
+        <div class="phone close"><div class="island"></div><div class="sb"><span>9:41</span><span>●●●</span></div><div class="glow"></div>
+          <div class="state">● Action</div>
+          <img class="av" src="assets/noemia.webp" alt="">
+          <div class="card"><div class="k">Email · brouillon</div><div class="t">À : Sophie Martin</div><div class="b">Bonjour Sophie, je te confirme notre rendez-vous de 16h30 aujourd'hui. À tout à l'heure, Mathis</div><div class="acts"><span>Modifier</span><span class="go">Envoyer</span></div></div>
+          <div class="sub" style="bottom:52%">Voilà ce que je propose. Je l'envoie ?</div>
+        </div>
+        <figcaption><b>4 · Carte temporaire</b><span>Aperçu de l'action en cours. Tu valides à l'oral (« Oui, envoie ») ou d'un toucher. La carte disparaît ensuite.</span></figcaption>
+      </figure>
+
+      <figure class="screen">
+        <div class="phone"><div class="island"></div><div class="sb"><span>9:41</span><span>●●●</span></div>
+          <div class="panel">
+            <div class="h">Profil <small>Fermer</small></div>
+            <div class="grp">Comptes Google</div>
+            <div class="row">Perso <em>Connecté</em></div>
+            <div class="row">groupenoem@gmail.com <em>Connecté</em></div>
+            <div class="grp">Outils connectés</div>
+            <div class="row">Agenda · Tâches · Gmail <span class="tg"></span></div>
+            <div class="row">Agenda familial <span class="tg"></span></div>
+            <div class="row">WhatsApp <span class="tg"></span></div>
+            <div class="row">Spotify <span class="tg off"></span></div>
+            <div class="row">+ Ajouter un outil <em>›</em></div>
+            <div class="grp">Préférences</div>
+            <div class="row">Heures de silence <em>22h–7h ›</em></div>
+            <div class="row">Historique <em>›</em></div>
+            <div class="row" style="color:#FF8A80">Déconnexion</div>
+          </div>
+        </div>
+        <figcaption><b>5 · Profil</b><span>Comptes, outils connectés, heures de silence, historique des conversations et des actions, déconnexion.</span></figcaption>
+      </figure>
+
+      <figure class="screen">
+        <div class="phone"><div class="island"></div>
+          <div class="lock"><div class="time">7:30</div><div class="date">mardi 21 octobre</div></div>
+          <div class="notif"><div class="app"><i></i>NOÉMIA<em>maintenant</em></div><b>Ton briefing est prêt</b><br>3 rendez-vous, 1 mail urgent de Dubreuil. Pluie à 17h. Pars à 7h50 : bouchons sur l'A86.</div>
+        </div>
+        <figcaption><b>6 · Notification</b><span>Le briefing, les rappels et les alertes arrivent par notification. Un toucher ouvre NOÉMIA, qui détaille à voix haute.</span></figcaption>
+      </figure>
+    </div>
+
+    <h3>Le halo indique l'état de NOÉMIA</h3>
+    <div class="halos">
+      <div class="halo-st"><i style="opacity:.4"></i><div><b>Repos</b><span>lueur faible qui respire</span></div></div>
+      <div class="halo-st"><i style="box-shadow:0 0 10px var(--halo)"></i><div><b>Écoute</b><span>bleu vif qui pulse</span></div></div>
+      <div class="halo-st"><i style="border-right-color:transparent"></i><div><b>Réflexion</b><span>arc qui tourne</span></div></div>
+      <div class="halo-st"><i style="border-width:4px"></i><div><b>Parole</b><span>intensité qui suit la voix</span></div></div>
+      <div class="halo-st"><i style="border-bottom-color:transparent;border-left-color:transparent"></i><div><b>Action</b><span>arc qui se remplit</span></div></div>
+      <div class="halo-st"><i style="border-color:var(--amber)"></i><div><b>Problème</b><span>ambre, elle explique</span></div></div>
+    </div>
+    <p class="read">Le thème de l'appli suit l'heure : clair le jour, sombre le soir. Le cadrage reste en buste sur fond neutre. Le logo NOEm et la maison-arbre restent visibles sur l'avatar.</p>
+  </section>
+
+  <section id="archi">
+    <div class="eyebrow">4 · Architecture technique</div>
+    <h2>Comment c'est construit</h2>
+    <p class="read">La formule Éco fait travailler l'iPhone au maximum : l'avatar, la voix et l'écoute y tournent gratuitement. Seul le « cerveau » est payé à l'usage. Ton VPS garde la mémoire et lance les briefings.</p>
+
+    <div class="arch">
+      <div class="node"><h4>iPhone</h4><div class="where">App React Native + Expo</div><ul>
+        <li>Avatar 3D en temps réel (Three.js / expo-gl, modèle GLB avec expressions du visage)</li>
+        <li>Écoute : reconnaissance vocale iOS, sur l'appareil</li>
+        <li>Voix : synthèse iOS, voix française « Premium »</li>
+        <li>Lèvres synchronisées sur les mots prononcés</li>
+        <li>Actions du téléphone : SMS, appel, WhatsApp, Spotify, Raccourcis</li></ul></div>
+      <div class="node"><h4>Ton VPS OVH</h4><div class="where">Node.js · PostgreSQL · Caddy (HTTPS)</div><ul>
+        <li>Orchestrateur : reçoit la phrase, appelle l'IA, exécute les outils</li>
+        <li>Mémoire par personne (souvenirs + recherche par le sens)</li>
+        <li>Jetons Google chiffrés (jamais sur le téléphone)</li>
+        <li>Tâches planifiées : briefing, rappels, surveillance des mails urgents</li>
+        <li>Envoi des notifications push</li></ul></div>
+      <div class="node"><h4>Services externes</h4><div class="where">Payés à l'usage ou gratuits</div><ul>
+        <li><b>Claude Haiku 5.5</b> : compréhension, raisonnement, rédaction</li>
+        <li>Google Agenda, Tasks, Gmail (API gratuites)</li>
+        <li>Notifications Apple (gratuites)</li>
+        <li>Recherche web et itinéraires (V1.1)</li></ul></div>
+      <div class="flow">Toi ──voix──▶ iPhone (texte transcrit) ──▶ VPS ──▶ Claude Haiku 5.5
+                                                   │          │  décide : « créer un événement »
+                                                   │          ◀──────────┘
+                                                   ├──▶ Google Agenda (création)
+iPhone ◀── réponse + expression + carte ───────────┘
+  └─▶ NOÉMIA parle, ses lèvres et son visage s'animent, la carte s'affiche</div>
+    </div>
+
+    <h3>Choix importants et pourquoi</h3>
+    <ul class="clean read">
+      <li><b>React Native + Expo</b> plutôt que Swift. Un seul langage (TypeScript) côté app et serveur. Les versions iPhone se compilent dans le cloud (Expo EAS), donc pas besoin de Mac. Et une version Android reste possible plus tard.</li>
+      <li><b>Avatar 3D sur l'appareil</b> plutôt que vidéo IA : aucun coût à la minute, une réaction instantanée, et des expressions pilotées finement (sourire, sourcils, regard).</li>
+      <li><b>Claude Haiku 5.5 :</b> le moins cher des modèles Claude actuels, capable d'enchaîner plusieurs outils. Passer à un modèle plus puissant plus tard ne demande de changer qu'un réglage.</li>
+      <li><b>Mémoire sur ton VPS</b>, déjà couverte par ta sauvegarde OVH automatique.</li>
+    </ul>
+
+    <div class="callout warn"><strong>Connexion Google sans Workspace</strong>Tes deux adresses sont des Gmail gratuits. Le projet Google sera publié en mode « production » sans vérification, ce que Google accepte pour un usage personnel de moins de 100 utilisateurs. Conséquence : à la première connexion, chaque membre de la famille verra l'écran « Google n'a pas validé cette application » et devra cliquer sur « Continuer ». Ensuite, plus aucune reconnexion n'est nécessaire. Cette règle Google est à confirmer lors de la mise en place. Solution de secours pour Gmail : un « mot de passe d'application ».</div>
+
+    <div class="callout warn"><strong>Limites d'iPhone à connaître</strong>Apple impose ton appui pour envoyer un SMS ou lancer un appel. Les alarmes et le mode silencieux passent par des Raccourcis. NOÉMIA ne peut pas écouter quand l'appli est fermée, ce qui va avec ton choix « bouton seulement ».</div>
+  </section>
+
+  <section id="couts">
+    <div class="eyebrow">5 · Budget</div>
+    <h2>Formule Éco</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Poste</th><th>Détail</th><th style="text-align:right">Par mois</th></tr></thead>
+      <tbody>
+        <tr><td>Cerveau</td><td>Claude Haiku 5.5, ≈ 60 échanges par jour, 1 personne active</td><td class="num">≈ 2 €</td></tr>
+        <tr><td>Écoute et voix</td><td>Reconnaissance et synthèse natives iOS</td><td class="num">0 €</td></tr>
+        <tr><td>Avatar 3D</td><td>Calculé sur l'iPhone</td><td class="num">0 €</td></tr>
+        <tr><td>Serveur</td><td>VPS OVH existant</td><td class="num">déjà payé</td></tr>
+        <tr><td>Apple Developer</td><td>99 $/an, TestFlight pour la famille</td><td class="num">≈ 8 €</td></tr>
+        <tr class="total"><td>Total</td><td>Chaque membre de la famille actif ajoute ≈ 1 à 2 €</td><td class="num">≈ 10 €</td></tr>
+      </tbody>
+    </table></div>
+    <p class="read" style="color:var(--muted);font-size:14.5px">Une seule fois : la création du modèle 3D d'après la photo. Ça peut être 0 € avec des outils d'IA 3D et des retouches, ou environ 150 à 400 € avec un modeleur freelance. Voir le point 1 de la section « À trancher ».</p>
+  </section>
+
+  <section id="route">
+    <div class="eyebrow">6 · Feuille de route</div>
+    <h2>Du prototype à la famille</h2>
+    <div class="road">
+      <div class="step"><div class="when">Étape 0<small>≈ 2 à 3 semaines</small></div><div><h4>Prototype « elle est vivante »</h4><ul>
+        <li>Modèle 3D de NOÉMIA avec ses expressions</li><li>Respiration, clignements, micro-mouvements, halo animé</li><li>Elle dit une phrase avec les lèvres synchronisées, sur ton iPhone via TestFlight</li></ul>
+        <div class="done">Validé quand : tu trouves qu'elle a l'air vivante.</div></div></div>
+      <div class="step"><div class="when">Étape 1<small>≈ 4 à 6 semaines</small></div><div><h4>Première version utile</h4><ul>
+        <li>Première rencontre et connexion Google (perso + NOEM)</li><li>Conversation tour par tour avec sous-titres</li><li>Agenda, Tâches, Gmail : lire, créer, répondre, supprimer, avec confirmation orale</li><li>Cartes temporaires, mémoire et « oublie ça », profil et historique</li></ul>
+        <div class="done">Validé quand : tu gères une journée réelle uniquement à la voix.</div></div></div>
+      <div class="step"><div class="when">Étape 2<small>≈ 2 à 3 semaines</small></div><div><h4>Proactivité</h4><ul>
+        <li>Briefing du matin, rappels de réunion, alerte mail urgent, bilan du soir</li><li>Heures de silence, apprentissage des habitudes</li></ul></div></div>
+      <div class="step"><div class="when">Étape 3<small>≈ 3 semaines</small></div><div><h4>Téléphone et intégrations (V1.1)</h4><ul>
+        <li>SMS, appels, WhatsApp, Spotify, pack de Raccourcis</li><li>Recherche web, itinéraires, aide à la réservation</li></ul></div></div>
+      <div class="step"><div class="when">Étape 4<small>≈ 2 semaines</small></div><div><h4>Famille</h4><ul>
+        <li>Un profil par membre, agenda familial partagé</li><li>Distribution TestFlight à toute la famille</li></ul></div></div>
+    </div>
+  </section>
+
+  <section id="ouvert">
+    <div class="eyebrow">7 · À trancher</div>
+    <h2>Ce qu'il me faut pour démarrer</h2>
+    <ol class="q-open read">
+      <li>Le modèle 3D : je le crée avec des outils d'IA 3D (0 €), ou tu passes par un modeleur freelance ?<span>Ça conditionne la qualité des expressions faciales. Je recommande d'essayer d'abord l'IA à l'étape 0.</span></li>
+      <li>As-tu un Mac ?<span>Ce n'est pas obligatoire grâce à la compilation cloud, mais ça accélère les tests.</span></li>
+      <li>Le compte Apple Developer : tu l'ouvres à ton nom ou au nom de NOEM ?<span>Le nom apparaît comme éditeur de l'appli.</span></li>
+      <li>La voix : écoute les voix françaises « Premium » de ton iPhone (Réglages › Accessibilité › Contenu énoncé › Voix) et choisis ta préférée.</li>
+      <li>Spotify : as-tu un abonnement Premium ?<span>Sans Premium, NOÉMIA peut seulement ouvrir une playlist, pas piloter la lecture.</span></li>
+      <li>Je crée le projet de code dans ce dossier et je démarre l'étape 0 ?</li>
+    </ol>
+  </section>
+</div>

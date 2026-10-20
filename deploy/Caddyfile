@@ -1,0 +1,5 @@
+# HTTPS automatique (Let's Encrypt) pour le nom du VPS, puis relais vers le serveur NOÉMIA
+vps-1d994dff.vps.ovh.ca {
+	encode gzip
+	reverse_proxy 127.0.0.1:8787
+}

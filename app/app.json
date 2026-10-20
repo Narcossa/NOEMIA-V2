@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "NOÉMIA",
+    "slug": "noemia",
+    "scheme": "noemia",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "fr.noem.noemia",
+      "supportsTablet": false,
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "whatsapp",
+          "spotify",
+          "shortcuts",
+          "maps"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "fr.noem.noemia",
+      "adaptiveIcon": {
+        "backgroundColor": "#07090D",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "plugins": [
+      "./plugins/withoutPush",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "NOÉMIA t'écoute quand tu touches le bouton pour lui parler.",
+          "speechRecognitionPermission": "NOÉMIA transforme ta voix en texte pour comprendre tes demandes."
+        }
+      ],
+      "expo-web-browser",
+      "expo-secure-store",
+      "expo-background-task",
+      "expo-localization",
+      [
+        "expo-notifications",
+        {
+          "enableBackgroundRemoteNotifications": false
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.4"
+          }
+        }
+      ]
+    ]
+  }
+}

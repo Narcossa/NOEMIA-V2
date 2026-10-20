@@ -1,0 +1,125 @@
+<title>NOÉMIA Prototype</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout : une scène plein écran avec NOÉMIA, sous-titres et bouton micro en bas ; le « Labo » s'ouvre en panneau latéral */
+:root{
+  --bg:#E7EBF0; --bg2:#F6F8FA; --ink:#141922; --muted:#5B6474; --line:#D2D8E1; --panel:#FFFFFF;
+  --halo:#1F6FFF; --halo-glow:rgba(31,111,255,.35); --btn:#10141C; --btn-ink:#CFE0FF;
+  --display:"Jost","Avenir Next","Segoe UI",sans-serif; --body:"Figtree","Segoe UI",system-ui,sans-serif;
+}
+:root[data-daylight="nuit"]{
+  --bg:#07090D; --bg2:#121722; --ink:#E8ECF2; --muted:#8F99AA; --line:#262D38; --panel:#12161E;
+  --halo:#4E92FF; --halo-glow:rgba(78,146,255,.45); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--body)}
+body{min-height:100dvh;overflow:hidden}
+.stage{position:fixed;inset:0;background:radial-gradient(70% 55% at 55% 35%,var(--bg2),var(--bg) 70%);transition:background .6s}
+.stage::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(40% 30% at 35% 30%,var(--halo-glow),transparent 70%);opacity:.35}
+/* Téléphone (portrait) : NOÉMIA en grand, cadrée sur le visage ; écran large : buste entier */
+#avatar{position:absolute;left:50%;bottom:0;transform:translateX(-61%);height:86dvh;aspect-ratio:862/1146;max-width:none}
+@media (min-aspect-ratio:3/4){#avatar{height:94dvh;transform:translateX(-50%)}}
+
+.top{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;z-index:3;
+  padding:calc(env(safe-area-inset-top,0px) + 12px) max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px))}
+.brand{font:400 13px var(--display);letter-spacing:.32em;color:var(--muted)}
+.brand b{font-weight:500;color:var(--ink)}
+.icon-btn{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:color-mix(in srgb,var(--panel) 70%,transparent);color:var(--ink);display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(8px)}
+.icon-btn svg{width:18px;height:18px}
+.tools{display:flex;gap:8px}
+
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:3;display:grid;justify-items:center;gap:14px;
+  padding:0 max(16px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 22px) max(16px,env(safe-area-inset-left,0px));
+  background:linear-gradient(to top,color-mix(in srgb,var(--bg) 85%,transparent) 40%,transparent)}
+#subtitle{max-width:34ch;text-align:center;font-size:16.5px;line-height:1.45;text-wrap:balance;padding:10px 16px;border-radius:14px;
+  background:color-mix(in srgb,var(--panel) 72%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+#subtitle:empty{visibility:hidden}
+#subtitle .toi{color:var(--muted);font-style:italic}
+#mic{width:74px;height:74px;border-radius:50%;border:2px solid var(--halo);background:var(--btn);cursor:pointer;display:grid;place-items:center;
+  box-shadow:0 0 22px var(--halo-glow),inset 0 0 12px var(--halo-glow);transition:transform .15s}
+#mic:active{transform:scale(.95)}
+#mic svg{width:26px;height:26px;color:var(--btn-ink)}
+#mic[data-state="ecoute"]{box-shadow:0 0 0 10px var(--halo-glow),0 0 34px var(--halo)}
+@media (prefers-reduced-motion:no-preference){#mic[data-state="ecoute"]{animation:pulse 1.6s ease-in-out infinite}}
+@keyframes pulse{50%{box-shadow:0 0 0 18px transparent,0 0 40px var(--halo)}}
+#mic .i-stop{display:none}
+#mic[data-state="parole"] .i-mic{display:none}
+#mic[data-state="parole"] .i-stop{display:block}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--halo);outline-offset:3px}
+
+#lab{position:fixed;z-index:5;top:0;right:0;bottom:0;width:min(400px,100vw);background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;
+  padding:calc(env(safe-area-inset-top,0px) + 16px) max(18px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 24px) 18px;
+  box-shadow:-20px 0 60px rgba(0,0,0,.18)}
+#lab header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+#lab h2{font:400 22px var(--display);margin:0;letter-spacing:.04em}
+#lab h3{font:500 11.5px var(--display);letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+#lab p.note{margin:0 0 8px;color:var(--muted);font-size:13.5px}
+.line{display:block;width:100%;text-align:left;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:9px 11px;margin-bottom:6px;font:inherit;font-size:14px;cursor:pointer}
+.line:hover{border-color:var(--halo)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:13.5px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--halo);border-color:var(--halo);color:#fff}
+select,textarea,input[type=range]{width:100%;font:inherit;font-size:14px}
+select,textarea{padding:9px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+textarea{min-height:76px;resize:vertical}
+.row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.row select{flex:1}
+.go{border:0;background:var(--halo);color:#fff;border-radius:8px;padding:9px 16px;font:600 14px var(--body);cursor:pointer;white-space:nowrap}
+label.small{font-size:13px;color:var(--muted);display:flex;justify-content:space-between;margin-top:10px}
+</style>
+
+<div class="stage" aria-hidden="true"></div>
+<canvas id="avatar" role="img" aria-label="NOÉMIA, humanoïde animé"></canvas>
+
+<div class="top">
+  <div class="brand"><b>NOÉMIA</b> · prototype</div>
+  <div class="tools">
+    <button class="icon-btn" id="lab-toggle" type="button" aria-label="Ouvrir le labo" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    </button>
+    <button class="icon-btn" type="button" aria-label="Profil (étape 1)" title="Profil : arrive à l'étape 1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="bottom">
+  <div id="subtitle" aria-live="polite"></div>
+  <button id="mic" type="button" data-state="repos" aria-label="Parler à NOÉMIA">
+    <svg class="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    <svg class="i-stop" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+  </button>
+</div>
+
+<aside id="lab" hidden aria-label="Labo de réglage">
+  <header><h2>Labo</h2><button class="icon-btn" id="lab-close" type="button" aria-label="Fermer le labo">✕</button></header>
+  <p class="note">Pour tester NOÉMIA à l'étape 0 : voix, phrases, émotions et halo.</p>
+
+  <h3>Voix</h3>
+  <select id="voice" aria-label="Voix"><option>Chargement des voix…</option></select>
+  <p class="note" id="voice-count" style="margin-top:6px"></p>
+  <p class="note">Sur iPhone, installe d'abord une voix « Améliorée » ou « Premium » : Réglages › Accessibilité › Contenu énoncé › Voix › Français. Recharge ensuite cette page.</p>
+  <label class="small" for="rate">Vitesse <span id="rate-val">1.00</span></label>
+  <input id="rate" type="range" min="0.8" max="1.2" step="0.05" value="1">
+
+  <h3>Phrases de démonstration</h3>
+  <div id="demo-lines"></div>
+
+  <h3>Fais-la parler</h3>
+  <form id="say-form">
+    <textarea id="say-text" aria-label="Texte à dire">Mathis, j'ai rangé tes rendez-vous de la semaine. Jeudi est chargé, je te conseille de garder ta soirée libre.</textarea>
+    <div class="row"><select id="say-emotion" aria-label="Émotion"></select><button class="go" type="submit">Dire</button></div>
+  </form>
+
+  <h3>Émotion</h3>
+  <div class="chips" id="emotions"></div>
+
+  <h3>Halo</h3>
+  <div class="chips" id="halos"></div>
+</aside>
+
+<script type="module" src="src/main.js"></script>

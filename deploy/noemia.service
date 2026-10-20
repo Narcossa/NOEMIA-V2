@@ -1,0 +1,18 @@
+[Unit]
+Description=NOÉMIA serveur
+After=network-online.target
+
+[Service]
+Type=simple
+User=noemia
+WorkingDirectory=/opt/noemia/server
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning --env-file=/opt/noemia/server/.env src/index.ts
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/noemia
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

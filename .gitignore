@@ -1,0 +1,12 @@
+node_modules/
+.env
+*.env.local
+data/
+server/data/
+app/ios/
+app/android/
+app/.expo/
+app/dist/
+*.ipa
+.DS_Store
+app/src/avatar/avatarHtml.ts

@@ -1,0 +1,21 @@
+{
+  "name": "noemia-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env src/index.ts",
+    "dev": "node --watch --disable-warning=ExperimentalWarning --env-file-if-exists=.env src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
+    "fastify": "^5.12.7",
+    "googleapis": "^186.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "^6"
+  }
+}
