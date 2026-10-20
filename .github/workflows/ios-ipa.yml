@@ -52,7 +52,7 @@ jobs:
         if: matrix.variante == 'montre'
         run: |
           PBX=$(ls -d ios/*.xcodeproj | head -1)/project.pbxproj
-          sed -i '' -E "s/(INFOPLIST_KEY_WKCompanionAppBundleIdentifier = )[^;]*;/\"fr.noem.noemia.$NOEMIA_EQUIPE\";/" "$PBX"
+          sed -i '' -E "s/INFOPLIST_KEY_WKCompanionAppBundleIdentifier = [^;]*;/INFOPLIST_KEY_WKCompanionAppBundleIdentifier = \"fr.noem.noemia.$NOEMIA_EQUIPE\";/" "$PBX"
           grep -n "WKCompanionAppBundleIdentifier" "$PBX"
 
       - name: Compilation (sans signature)
