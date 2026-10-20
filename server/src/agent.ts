@@ -12,11 +12,12 @@ import { contactTools } from "./tools/contacts.ts";
 import { memoryTools, recentMemories } from "./tools/memory.ts";
 import { phoneTools } from "./tools/phone.ts";
 import { pendingTools } from "./tools/pending.ts";
+import { iosTools } from "./tools/ios.ts";
 import type { Card, Ctx, PhoneAction, Tool } from "./tools/types.ts";
 
 const client = new Anthropic();
 
-const TOOLS: Tool[] = [...calendarTools, ...taskTools, ...gmailTools, ...contactTools, ...memoryTools, ...phoneTools, ...pendingTools];
+const TOOLS: Tool[] = [...calendarTools, ...taskTools, ...gmailTools, ...contactTools, ...memoryTools, ...phoneTools, ...iosTools, ...pendingTools];
 const BY_NAME = new Map(TOOLS.map(t => [t.def.name, t]));
 const DEFS = TOOLS.map(t => t.def);
 
@@ -44,7 +45,11 @@ Comment tu agis :
 - Tu ne fais jamais de paiement, de virement ni d'opération bancaire.
 - Retiens de toi-même ce qui compte (prêts, préférences, habitudes, proches, projets) avec memoire_retenir. « Oublie ça » : memoire_oublier.
 - Pour une question sur le passé (« qu'est-ce que j'ai dit hier sur… »), utilise memoire_chercher.
-- Si un outil échoue, explique simplement le problème et propose une solution.`;
+- Si un outil échoue, explique simplement le problème et propose une solution.
+
+Données de l'iPhone :
+- Chaque message peut être précédé d'un bloc « [iPhone : …] » : sommeil de la nuit, pas du jour, fréquence cardiaque au repos, lieu actuel, agenda iCloud et Rappels de l'iPhone. Utilise-les avec tact et seulement quand c'est utile (« Tu as peu dormi, je t'allège la matinée ? »). Ne les récite jamais sans raison.
+- « Rappelle-moi de… à 18 h » : rappel_iphone_preparer (l'iPhone sonnera). Les listes partagées ou pro restent dans les tâches Google.`;
 
 function profileBlock(userId: number) {
   const user = one("SELECT name FROM users WHERE id = ?", userId);
@@ -112,10 +117,16 @@ function tagFilter(emit: (e: TurnEvent) => void) {
   };
 }
 
-export async function turn(userId: number, text: string, tz: string, emit: (e: TurnEvent) => void = () => {}): Promise<TurnResult> {
+// Résumé des données de l'iPhone joint à la demande (sommeil, pas, lieu, agenda iCloud…)
+function deviceBlock(device?: Record<string, unknown>) {
+  if (!device || !Object.values(device).some(Boolean)) return "";
+  return `\n[iPhone : ${JSON.stringify(device).slice(0, 3000)}]`;
+}
+
+export async function turn(userId: number, text: string, tz: string, emit: (e: TurnEvent) => void = () => {}, device?: Record<string, unknown>): Promise<TurnResult> {
   const ctx: Ctx = { userId, tz, cards: [], phone: [] };
   const messages = loadConversation(userId);
-  messages.push({ role: "user", content: `${stamp(tz)}\n${text}` });
+  messages.push({ role: "user", content: `${stamp(tz)}${deviceBlock(device)}\n${text}` });
   run("INSERT INTO log (user_id, role, text) VALUES (?, 'toi', ?)", userId, text);
 
   const system: Anthropic.TextBlockParam[] = [

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, linkGoogleAccount, type Me, type Settings } from "../api";
 import { frenchVoices, say, type VoiceInfo } from "../voice";
 import { DEFAULTS, reschedule } from "../notifications";
+import { currentPermissions, requestAll, type Permissions } from "../device";
 import type { Palette } from "../theme";
 
 type Props = { visible: boolean; onClose: (s?: Settings) => void; onSignedOut: () => void; c: Palette };
@@ -18,6 +19,7 @@ export function Profile({ visible, onClose, onSignedOut, c }: Props) {
   const [settings, setSettings] = useState<Settings>({});
   const [history, setHistory] = useState<{ role: string; text: string; at: string }[] | null>(null);
   const [error, setError] = useState("");
+  const [perms, setPerms] = useState<Permissions | null>(null);
 
   const load = async () => {
     try {
@@ -25,6 +27,7 @@ export function Profile({ visible, onClose, onSignedOut, c }: Props) {
       setMe(m);
       setSettings({ ...DEFAULTS, ...m.settings });
       setVoices(await frenchVoices());
+      setPerms(await currentPermissions());
       setError("");
     } catch (e: any) { setError(e.message); }
   };
@@ -102,6 +105,17 @@ export function Profile({ visible, onClose, onSignedOut, c }: Props) {
           <Row><T>Bilan du soir</T><Switch value={e.enabled} onValueChange={v => update({ bilan: { ...e, enabled: v } })} /></Row>
           {e.enabled ? <Row><T muted>Heure</T><Stepper value={e.hour * 60 + e.minute} min={960} max={1380} step={15} fmt={v => hh(Math.floor(v / 60), v % 60)} onChange={v => update({ bilan: { ...e, hour: Math.floor(v / 60), minute: v % 60 } })} /></Row> : null}
           <Row><T>Rappel avant réunion</T><Stepper value={settings.reminderMinutes ?? 10} min={5} max={60} step={5} fmt={v => `${v} min`} onChange={v => update({ reminderMinutes: v })} /></Row>
+
+          <Group title="iPhone" />
+          {perms ? (["sante", "calendrier", "rappels", "position"] as const).map(k => (
+            <Row key={k}><T>{{ sante: "Santé", calendrier: "Calendrier", rappels: "Rappels", position: "Position" }[k]}</T>
+              <T muted>{perms[k] ? "autorisé" : "non autorisé"}</T></Row>
+          )) : null}
+          <Row onPress={async () => setPerms(await requestAll())}><Text style={{ color: c.halo, fontSize: 15 }}>Autoriser l'accès aux données de l'iPhone</Text></Row>
+          <Text style={[st.note, { color: c.muted }]}>NOÉMIA lit ton sommeil, tes pas, ta position, ton agenda iCloud et tes Rappels pour mieux t'aider. Elle peut aussi créer des Rappels qui sonnent sur l'iPhone. Tu peux tout retirer dans Réglages › Confidentialité.</Text>
+
+          <Group title="Siri et raccourcis" />
+          <Text style={[st.note, { color: c.muted, marginTop: 0 }]}>Dis « Dis Siri, parle à NOÉMIA », « Dis Siri, demande à NOÉMIA » ou « Dis Siri, briefing NOÉMIA ». Tu peux aussi associer « Parler à NOÉMIA » au bouton Action (Réglages › Bouton Action › Raccourci) et ajouter le widget NOÉMIA sur l'écran d'accueil ou de verrouillage.</Text>
 
           <Group title="Heures de silence" />
           <Row><T>De</T><Stepper value={q.from} min={18} max={23} fmt={v => hh(v)} onChange={v => update({ quiet: { ...q, from: v } })} /></Row>

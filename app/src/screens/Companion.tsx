@@ -2,7 +2,7 @@
 // Un appui lance l'échange ; après chaque réponse elle se remet à écouter toute seule.
 // Appui pendant qu'elle parle : on l'interrompt et on lui parle. Appui long : fin de la conversation.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Notifications from "expo-notifications";
 import { useSpeechRecognitionEvent } from "expo-speech-recognition";
@@ -128,10 +128,14 @@ export function Companion({ greeting, onSignedOut }: Props) {
     await sp.whenIdle();
     send({ type: "silence" });
 
-    // Actions sur le téléphone : on quitte la conversation (une autre appli s'ouvre)
-    if (phone.length) {
+    // Actions natives sans changer d'appli (Rappels, Calendrier iPhone) : la conversation continue
+    const inApp: PhoneAction[] = phone.filter(a => a.type === "reminder" || a.type === "icloud_event");
+    for (const a of inApp) { const err = await perform(a); if (err) await sp.sayNow(err); }
+    // Actions qui ouvrent une autre appli (SMS, WhatsApp, Spotify…) : on termine la conversation
+    const external = phone.filter(a => !inApp.includes(a));
+    if (external.length) {
       endConversation();
-      for (const a of phone) { const err = await perform(a); if (err) await sp.sayNow(err); }
+      for (const a of external) { const err = await perform(a); if (err) await sp.sayNow(err); }
       return;
     }
     if (conversation.current) listen();
@@ -219,6 +223,29 @@ export function Companion({ greeting, onSignedOut }: Props) {
       runTurn((onEvent, signal) => chatStream("Qu'est-ce que c'est que cet email important ?", onEvent, signal));
     }
   }, [last, ready, runTurn]);
+
+  // Siri, Raccourcis, widget et bouton Action ouvrent NOÉMIA par un lien :
+  // noemia://parler · noemia://demander?q=… · noemia://briefing · noemia://bilan
+  const handleLink = useCallback((url: string | null | undefined) => {
+    if (!url || !url.startsWith("noemia://") || url.startsWith("noemia://auth")) return;
+    const u = new URL(url.replace("noemia://", "https://noemia/"));
+    const action = u.pathname.replace(/^\//, "") || u.hostname;
+    conversation.current = true; setInConversation(true);
+    if (action === "demander" && u.searchParams.get("q")) {
+      const q = u.searchParams.get("q")!;
+      setSubtitle({ who: "toi", text: q });
+      runTurn((onEvent, signal) => chatStream(q, onEvent, signal));
+    } else if (action === "briefing" || action === "bilan") {
+      runTurn((onEvent, signal) => briefingStream(action === "bilan" ? "soir" : "matin", onEvent, signal));
+    } else listen();
+  }, [runTurn, listen]);
+
+  useEffect(() => {
+    if (!ready) return;
+    Linking.getInitialURL().then(handleLink);
+    const sub = Linking.addEventListener("url", e => handleLink(e.url));
+    return () => sub.remove();
+  }, [ready, handleLink]);
 
   const confirmCard = (yes: boolean) => {
     setCard(null);

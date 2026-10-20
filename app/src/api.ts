@@ -3,6 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import { getCalendars } from "expo-localization";
 import { fetch as streamFetch } from "expo/fetch";
+import { deviceContext } from "./device";
 
 export const API_URL = "https://vps-1d994dff.vps.ovh.ca";
 const REDIRECT = "noemia://auth";
@@ -17,7 +18,9 @@ export type PhoneAction =
   | { type: "whatsapp"; to: string; text: string }
   | { type: "spotify"; query: string }
   | { type: "shortcut"; name: string; input?: string }
-  | { type: "maps"; destination: string };
+  | { type: "maps"; destination: string }
+  | { type: "reminder"; title: string; due?: string; list?: string }
+  | { type: "icloud_event"; title: string; start: string; end?: string; location?: string };
 export type Turn = { reply: string; emotion: string; cards: Card[]; phone: PhoneAction[] };
 export type Account = { id: number; email: string; label: string; is_primary: number };
 export type Settings = {
@@ -105,10 +108,12 @@ function utf8(bytes: Uint8Array): string {
 async function streamCall(path: string, body: object, onEvent: (e: StreamEvent) => void, signal?: AbortSignal) {
   const token = await getToken();
   if (!token) throw new AuthError("Non connecté");
+  // Données de l'iPhone (Santé, lieu, iCloud) : jamais plus d'une seconde et demie d'attente
+  const device = await Promise.race([deviceContext().catch(() => undefined), new Promise(r => setTimeout(() => r(undefined), 1500))]);
   const res = await streamFetch(API_URL + path, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ ...body, tz: timezone() }),
+    body: JSON.stringify({ ...body, tz: timezone(), device }),
     signal,
   });
   if (res.status === 401) { await clearToken(); throw new AuthError("Session expirée"); }

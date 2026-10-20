@@ -16,7 +16,9 @@ export type PhoneAction =
   | { type: "whatsapp"; to: string; text: string }
   | { type: "spotify"; query: string }
   | { type: "shortcut"; name: string; input?: string }
-  | { type: "maps"; destination: string };
+  | { type: "maps"; destination: string }
+  | { type: "reminder"; title: string; due?: string; list?: string }
+  | { type: "icloud_event"; title: string; start: string; end?: string; location?: string };
 
 export type Ctx = {
   userId: number;

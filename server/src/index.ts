@@ -113,12 +113,12 @@ app.post("/api/chat", async req => {
 
 // Version diffusée : une ligne JSON par événement (texte au fil de l'eau, expression, outil en cours),
 // pour que l'appli commence à parler dès la première phrase.
-async function streamTurn(req: FastifyRequest, reply: any, text: string, tz: string) {
+async function streamTurn(req: FastifyRequest, reply: any, text: string, tz: string, device?: Record<string, unknown>) {
   reply.hijack();
   reply.raw.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-cache", "x-accel-buffering": "no" });
   const send = (o: object) => reply.raw.write(JSON.stringify(o) + "\n");
   try {
-    const r = await turn(uid(req), text, tz, send);
+    const r = await turn(uid(req), text, tz, send, device);
     send({ type: "done", emotion: r.emotion, cards: r.cards, phone: r.phone, reply: r.reply });
   } catch (err: any) {
     req.log.error(err);
@@ -128,13 +128,13 @@ async function streamTurn(req: FastifyRequest, reply: any, text: string, tz: str
 }
 
 app.post("/api/chat/stream", async (req, reply) => {
-  const { text, tz } = req.body as { text: string; tz?: string };
-  return streamTurn(req, reply, (text ?? "").trim().slice(0, 4000) || "…", tz || config.defaultTimezone);
+  const { text, tz, device } = req.body as { text: string; tz?: string; device?: Record<string, unknown> };
+  return streamTurn(req, reply, (text ?? "").trim().slice(0, 4000) || "…", tz || config.defaultTimezone, device);
 });
 
 app.post("/api/briefing/stream", async (req, reply) => {
-  const { kind, tz } = req.body as { kind: "matin" | "soir"; tz?: string };
-  return streamTurn(req, reply, kind === "soir" ? BILAN : BRIEFING, tz || config.defaultTimezone);
+  const { kind, tz, device } = req.body as { kind: "matin" | "soir"; tz?: string; device?: Record<string, unknown> };
+  return streamTurn(req, reply, kind === "soir" ? BILAN : BRIEFING, tz || config.defaultTimezone, device);
 });
 
 app.post("/api/reset", async req => { resetConversation(uid(req)); return { ok: true }; });

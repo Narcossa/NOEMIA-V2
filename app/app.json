@@ -3,7 +3,7 @@
     "name": "NOÉMIA",
     "slug": "noemia",
     "scheme": "noemia",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -55,7 +55,30 @@
             "deploymentTarget": "16.4"
           }
         }
-      ]
+      ],
+      "@bacons/apple-targets",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "NOÉMIA lit ton sommeil, tes pas et ta fréquence cardiaque pour adapter ses conseils et ton briefing.",
+          "NSHealthUpdateUsageDescription": false,
+          "background": false
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "NOÉMIA lit et ajoute des événements dans le calendrier de ton iPhone.",
+          "remindersPermission": "NOÉMIA crée des Rappels qui sonnent sur ton iPhone à l'heure voulue."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "NOÉMIA utilise ta position pour les trajets et le contexte de tes demandes."
+        }
+      ],
+      "./plugins/withAppIntents"
     ]
   }
 }
