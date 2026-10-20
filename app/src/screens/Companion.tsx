@@ -2,24 +2,30 @@
 // Un appui lance l'échange ; après chaque réponse elle se remet à écouter toute seule.
 // Appui pendant qu'elle parle : on l'interrompt et on lui parle. Appui long : fin de la conversation.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { AppState, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Notifications from "expo-notifications";
 import { useSpeechRecognitionEvent } from "expo-speech-recognition";
 import { Avatar, type AvatarHandle } from "../avatar/Avatar";
-import { api, AuthError, briefingStream, chatStream, type Card, type PhoneAction, type Settings, type StreamEvent } from "../api";
+import { api, AuthError, briefingStream, chatStream, shareSessionWithSiri, type Card, type ImageInput, type PhoneAction, type Settings, type StreamEvent } from "../api";
+import { Native } from "../../modules/noemia-native/src";
 import { ensureListenPermission } from "../voice";
 import { Speaker } from "../speaker";
 import { Ear } from "../ear";
 import { perform } from "../phone";
 import { askNotificationPermission, checkUrgent, registerBackground, reschedule } from "../notifications";
 import { useDaylight } from "../theme";
-import { ActionCard, MicButton, ProfileIcon, type Phase } from "../ui";
+import { ActionCard, CameraIcon, MicButton, ProfileIcon, type Phase } from "../ui";
 import { Profile } from "./Profile";
 
 type Props = { greeting?: string; onSignedOut: () => void };
 
 const GOODBYE = /\b(au revoir|à plus|a plus|bonne nuit|merci c'est tout|c'est tout merci|ce sera tout|rien d'autre|c'est bon merci|tu peux te reposer)\b/i;
+
+// Questions simples auxquelles l'IA de l'iPhone répond instantanément, sans serveur
+const SIMPLE = /^(bonjour|salut|coucou|hello|bonsoir|merci( beaucoup)?|ça va|comment (ça|tu) va|quelle heure|on est quel jour|quel jour|raconte(-moi)? une blague|t'es là|tu es là)\b/i;
+const LOCAL_INSTRUCTIONS = "Tu es NOÉMIA, la compagne de gestion du quotidien de Mathis : majordome efficace, chaleureuse, avec de l'humour. Tu tutoies, en français, une à deux phrases courtes, sans mise en forme.";
 
 // Ce que NOÉMIA dit pendant qu'un outil travaille, si elle n'a encore rien dit
 const STATUS: Record<string, string> = {
@@ -60,9 +66,11 @@ export function Companion({ greeting, onSignedOut }: Props) {
   const ear = useRef<Ear | null>(null);
   const onHeardRef = useRef<(text: string) => void>(() => {});
   if (!ear.current) ear.current = new Ear(text => onHeardRef.current(text), text => setSubtitle({ who: "toi", text }));
+  const activity = useRef<string | null>(null);
+  const lastQuestion = useRef("");
 
   useSpeechRecognitionEvent("result", ev => ear.current!.result(ev.results[0]?.transcript ?? ""));
-  useSpeechRecognitionEvent("end", () => ear.current!.finish());
+  useSpeechRecognitionEvent("end", () => ear.current!.classicEnded());
   useSpeechRecognitionEvent("error", ev => {
     if (ev.error !== "no-speech" && ev.error !== "aborted") setSubtitle({ who: "noemia", text: "Je n'ai pas réussi à t'écouter : " + ev.message });
   });
@@ -89,7 +97,7 @@ export function Companion({ greeting, onSignedOut }: Props) {
   }, [endConversation]);
 
   // Un tour complet : texte diffusé → phrases dites au fil de l'eau → actions → nouvelle écoute
-  const runTurn = useCallback(async (start: (onEvent: (e: StreamEvent) => void, signal: AbortSignal) => Promise<void>) => {
+  const runTurn = useCallback(async (start: (onEvent: (e: StreamEvent) => void, signal: AbortSignal) => Promise<void>): Promise<void> => {
     setPhase("reflexion");
     send({ type: "emotion", name: "concentration" });
     const sp = speaker.current;
@@ -97,6 +105,7 @@ export function Companion({ greeting, onSignedOut }: Props) {
     sp.begin();
     let saidSomething = false;
     let phone: PhoneAction[] = [];
+    let reply = "";
     abort.current = new AbortController();
     // Si rien n'arrive vite, un petit mot pour meubler
     const filler = setTimeout(() => { if (!saidSomething) { saidSomething = true; sp.push("Hmm… "); } }, 2200);
@@ -104,7 +113,7 @@ export function Companion({ greeting, onSignedOut }: Props) {
       await start(ev => {
         switch (ev.type) {
           case "emotion": send({ type: "emotion", name: ev.name }); break;
-          case "text": if (ev.text.trim()) saidSomething = true; sp.push(ev.text); break;
+          case "text": if (ev.text.trim()) saidSomething = true; reply += ev.text; sp.push(ev.text); break;
           case "status": if (!saidSomething && STATUS[ev.tool]) { saidSomething = true; sp.push(STATUS[ev.tool] + " "); } break;
           case "done": {
             const last = ev.cards[ev.cards.length - 1] ?? null;
@@ -120,13 +129,31 @@ export function Companion({ greeting, onSignedOut }: Props) {
       if (e instanceof AuthError) { clearTimeout(filler); endConversation(); return onSignedOut(); }
       if (e?.name !== "AbortError") {
         send({ type: "emotion", name: "inquietude" });
-        sp.push(/network|fetch/i.test(e?.message ?? "") ? "Je n'arrive pas à joindre mon serveur. Vérifie la connexion internet." : String(e?.message ?? e));
+        const offline = /network|fetch|internet/i.test(e?.message ?? "");
+        // Hors connexion : l'IA de l'iPhone prend le relais pour les choses simples
+        const local = offline && lastQuestion.current && Native.localModelReady()
+          ? await Native.localAnswer(lastQuestion.current, LOCAL_INSTRUCTIONS + " Tu es hors connexion : précise-le si on te demande l'agenda ou les emails.")
+          : null;
+        sp.push(local ?? (offline ? "Je n'arrive pas à joindre mon serveur. Vérifie la connexion internet." : String(e?.message ?? e)));
       }
     }
     clearTimeout(filler);
     sp.end();
+    // Appli passée en arrière-plan pendant la réponse : la Live Activity affiche le résultat
+    if (activity.current) {
+      Native.updateActivity(activity.current, "fini", reply.trim().slice(0, 160) || "C'est fait.", { endAfterSeconds: 300 });
+      activity.current = null;
+    }
     await sp.whenIdle();
     send({ type: "silence" });
+
+    // Photo demandée : appareil photo ou photothèque, puis NOÉMIA regarde
+    const camera = phone.find(a => a.type === "camera") as Extract<PhoneAction, { type: "camera" }> | undefined;
+    if (camera) {
+      phone = phone.filter(a => a !== camera);
+      const image = await takePhoto(camera.source);
+      if (image) return runTurnRef.current((onEvent, signal) => chatStream(camera.question, onEvent, signal, image));
+    }
 
     // Actions natives sans changer d'appli (Rappels, Calendrier iPhone) : la conversation continue
     const inApp: PhoneAction[] = phone.filter(a => a.type === "reminder" || a.type === "icloud_event");
@@ -141,6 +168,18 @@ export function Companion({ greeting, onSignedOut }: Props) {
     if (conversation.current) listen();
     else setPhase("repos");
   }, [endConversation, listen, onSignedOut]);
+  const runTurnRef = useRef(runTurn);
+  runTurnRef.current = runTurn;
+
+  async function takePhoto(source: "camera" | "photos"): Promise<ImageInput | null> {
+    const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.5, base64: true, allowsEditing: false };
+    const perm = source === "camera" ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { await speaker.current.sayNow("J'ai besoin de l'accès à l'appareil photo. Tu peux l'autoriser dans les Réglages."); return null; }
+    const r = source === "camera" ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
+    const a = r.canceled ? null : r.assets?.[0];
+    if (!a?.base64) return null;
+    return { data: a.base64, media_type: a.mimeType === "image/png" ? "image/png" : "image/jpeg" };
+  }
 
   // Fin de phrase entendue
   function onHeard(text: string) {
@@ -151,6 +190,18 @@ export function Companion({ greeting, onSignedOut }: Props) {
     setSubtitle({ who: "toi", text });
     if (GOODBYE.test(text)) { conversation.current = false; setInConversation(false); }
     setCard(cur => (cur?.actionId ? cur : null));
+    lastQuestion.current = text;
+    // Réponse instantanée sur l'iPhone pour les échanges simples (salutations, merci, heure…)
+    if (SIMPLE.test(text.trim()) && Native.localModelReady()) {
+      const now = new Date().toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+      runTurn(async (onEvent, signal) => {
+        const answer = await Native.localAnswer(`${text}\n(Nous sommes ${now}.)`, LOCAL_INSTRUCTIONS);
+        if (!answer) return chatStream(text, onEvent, signal);
+        onEvent({ type: "emotion", name: "sourire" });
+        onEvent({ type: "text", text: answer });
+      });
+      return;
+    }
     runTurn((onEvent, signal) => chatStream(text, onEvent, signal));
   }
 
@@ -198,6 +249,12 @@ export function Companion({ greeting, onSignedOut }: Props) {
         await reschedule(me.settings);
         await registerBackground();
         checkUrgent().catch(() => {});
+        shareSessionWithSiri();
+        // Souvenirs et derniers échanges dans la recherche Spotlight de l'iPhone
+        api.memories().then(m => Native.indexSpotlight([
+          ...m.souvenirs.map(x => ({ id: "s:" + x.text.slice(0, 300), title: x.text.slice(0, 80), content: `Souvenir de NOÉMIA · ${x.at.slice(0, 10)}`, domain: "souvenirs" })),
+          ...m.echanges.map(x => ({ id: "s:" + x.text.slice(0, 300), title: x.text.slice(0, 80), content: `Demandé à NOÉMIA le ${x.at.slice(0, 10)}`, domain: "conversations" })),
+        ])).catch(() => {});
       } catch (e) { if (e instanceof AuthError) onSignedOut(); }
     })();
   }, [onSignedOut]);
@@ -208,12 +265,24 @@ export function Companion({ greeting, onSignedOut }: Props) {
     else setSubtitle({ who: "noemia", text: "Touche le bouton pour me parler." });
   }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Appli quittée pendant que NOÉMIA travaille : Live Activity dans la Dynamic Island
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", async state => {
+      if (state === "background" && (phaseRef.current === "reflexion" || phaseRef.current === "parole") && !activity.current) {
+        activity.current = await Native.startActivity("travail", "NOÉMIA", "Je prépare ta réponse…");
+      }
+      if (state === "active") { await Native.endAllActivities(); activity.current = null; }
+    });
+    return () => sub.remove();
+  }, []);
+
   // Toucher une notification : briefing, bilan…
   const last = Notifications.useLastNotificationResponse();
   const handled = useRef<string | null>(null);
   useEffect(() => {
     if (!ready || !last || handled.current === last.notification.request.identifier) return;
     handled.current = last.notification.request.identifier;
+    if (last.actionIdentifier === "fait" || last.actionIdentifier === "reporter") return;
     const action = last.notification.request.content.data?.action;
     if (action === "briefing" || action === "bilan") {
       conversation.current = true; setInConversation(true);
@@ -231,7 +300,11 @@ export function Companion({ greeting, onSignedOut }: Props) {
     const u = new URL(url.replace("noemia://", "https://noemia/"));
     const action = u.pathname.replace(/^\//, "") || u.hostname;
     conversation.current = true; setInConversation(true);
-    if (action === "demander" && u.searchParams.get("q")) {
+    if (action === "spotlight" && u.searchParams.get("id")?.startsWith("s:")) {
+      const q = `Parle-moi de ça : ${u.searchParams.get("id")!.slice(2)}`;
+      setSubtitle({ who: "toi", text: q });
+      runTurn((onEvent, signal) => chatStream(q, onEvent, signal));
+    } else if (action === "demander" && u.searchParams.get("q")) {
       const q = u.searchParams.get("q")!;
       setSubtitle({ who: "toi", text: q });
       runTurn((onEvent, signal) => chatStream(q, onEvent, signal));
@@ -262,10 +335,22 @@ export function Companion({ greeting, onSignedOut }: Props) {
 
       <View style={[st.top, { paddingTop: insets.top + 8 }]}>
         <Text style={[st.brand, { color: c.ink }]}>NOÉMIA</Text>
+        <View style={st.topRight}>
+        <Pressable onPress={async () => {
+            const image = await takePhoto("camera");
+            if (!image) return;
+            conversation.current = true; setInConversation(true);
+            setSubtitle({ who: "toi", text: "Regarde ça." });
+            runTurn((onEvent, signal) => chatStream("Qu'est-ce que tu vois ? Dis-moi l'essentiel et ce que je peux en faire.", onEvent, signal, image));
+          }} accessibilityRole="button" accessibilityLabel="Montrer quelque chose à NOÉMIA"
+          style={[st.iconBtn, { borderColor: c.line, backgroundColor: c.panelSoft }]}>
+          <CameraIcon color={c.ink} />
+        </Pressable>
         <Pressable onPress={() => setProfileOpen(true)} accessibilityRole="button" accessibilityLabel="Ouvrir le profil"
           style={[st.iconBtn, { borderColor: c.line, backgroundColor: c.panelSoft }]}>
           <ProfileIcon color={c.ink} />
         </Pressable>
+        </View>
       </View>
 
       <View style={[st.bottom, { paddingBottom: insets.bottom + 16 }]}>
@@ -294,6 +379,7 @@ const st = StyleSheet.create({
   root: { flex: 1 },
   top: { position: "absolute", top: 0, left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 18 },
   brand: { fontSize: 13, letterSpacing: 4, fontWeight: "500" },
+  topRight: { flexDirection: "row", gap: 10 },
   iconBtn: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   bottom: { position: "absolute", left: 0, right: 0, bottom: 0, alignItems: "center", gap: 12 },
   sub: { marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, maxWidth: 420 },

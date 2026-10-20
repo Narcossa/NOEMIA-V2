@@ -115,5 +115,9 @@ struct NoemiaWidgets: WidgetBundle {
   var body: some Widget {
     NoemiaWidget()
     NoemiaControl()
+    NoemiaLiveActivity()
+    #if canImport(AlarmKit)
+    if #available(iOS 26.0, *) { NoemiaAlarmActivity() }
+    #endif
   }
 }

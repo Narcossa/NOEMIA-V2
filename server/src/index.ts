@@ -4,11 +4,11 @@ import { config } from "./config.ts";
 import { all, one, run } from "./db.ts";
 import { hashToken, newToken, sign, verify, encrypt } from "./crypto.ts";
 import { accountsOf, authUrl, exchangeCode } from "./google.ts";
-import { turn, resetConversation } from "./agent.ts";
+import { turn, resetConversation, type ImageInput } from "./agent.ts";
 import { listEvents } from "./tools/calendar.ts";
 import { search } from "./tools/gmail.ts";
 
-const app = Fastify({ logger: { level: "info" }, trustProxy: true });
+const app = Fastify({ logger: { level: "info" }, trustProxy: true, bodyLimit: 10 * 1024 * 1024 });
 
 // --- Sessions de l'appli ---------------------------------------------------
 function userFrom(req: FastifyRequest): number | null {
@@ -106,19 +106,26 @@ app.get("/api/me", async req => {
 });
 
 app.post("/api/chat", async req => {
-  const { text, tz } = req.body as { text: string; tz?: string };
+  const { text, tz, channel } = req.body as { text: string; tz?: string; channel?: string };
   if (!text?.trim()) return { reply: "Je n'ai rien entendu.", emotion: "neutre", cards: [], phone: [] };
-  return turn(uid(req), text.trim().slice(0, 4000), tz || config.defaultTimezone);
+  const t = (channel === "siri" ? "[Via Siri] " : "") + text.trim().slice(0, 4000);
+  return turn(uid(req), t, tz || config.defaultTimezone);
 });
+
+// Souvenirs et derniers échanges, indexés dans Spotlight par l'appli
+app.get("/api/memories", async req => ({
+  souvenirs: all("SELECT id, text, at FROM memories WHERE user_id = ? ORDER BY id DESC LIMIT 200", uid(req)),
+  echanges: all("SELECT id, role, text, at FROM log WHERE user_id = ? AND role = 'toi' ORDER BY id DESC LIMIT 100", uid(req)),
+}));
 
 // Version diffusée : une ligne JSON par événement (texte au fil de l'eau, expression, outil en cours),
 // pour que l'appli commence à parler dès la première phrase.
-async function streamTurn(req: FastifyRequest, reply: any, text: string, tz: string, device?: Record<string, unknown>) {
+async function streamTurn(req: FastifyRequest, reply: any, text: string, tz: string, device?: Record<string, unknown>, image?: ImageInput) {
   reply.hijack();
   reply.raw.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-cache", "x-accel-buffering": "no" });
   const send = (o: object) => reply.raw.write(JSON.stringify(o) + "\n");
   try {
-    const r = await turn(uid(req), text, tz, send, device);
+    const r = await turn(uid(req), text, tz, send, device, image);
     send({ type: "done", emotion: r.emotion, cards: r.cards, phone: r.phone, reply: r.reply });
   } catch (err: any) {
     req.log.error(err);
@@ -128,8 +135,9 @@ async function streamTurn(req: FastifyRequest, reply: any, text: string, tz: str
 }
 
 app.post("/api/chat/stream", async (req, reply) => {
-  const { text, tz, device } = req.body as { text: string; tz?: string; device?: Record<string, unknown> };
-  return streamTurn(req, reply, (text ?? "").trim().slice(0, 4000) || "…", tz || config.defaultTimezone, device);
+  const { text, tz, device, image } = req.body as { text: string; tz?: string; device?: Record<string, unknown>; image?: ImageInput };
+  const img = image?.data && /^image\/(jpeg|png|webp)$/.test(image.media_type) && image.data.length < 7_000_000 ? image : undefined;
+  return streamTurn(req, reply, (text ?? "").trim().slice(0, 4000) || "…", tz || config.defaultTimezone, device, img);
 });
 
 app.post("/api/briefing/stream", async (req, reply) => {

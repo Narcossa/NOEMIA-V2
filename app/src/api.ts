@@ -4,6 +4,7 @@ import * as WebBrowser from "expo-web-browser";
 import { getCalendars } from "expo-localization";
 import { fetch as streamFetch } from "expo/fetch";
 import { deviceContext } from "./device";
+import { Native } from "../modules/noemia-native/src";
 
 export const API_URL = "https://vps-1d994dff.vps.ovh.ca";
 const REDIRECT = "noemia://auth";
@@ -20,7 +21,10 @@ export type PhoneAction =
   | { type: "shortcut"; name: string; input?: string }
   | { type: "maps"; destination: string }
   | { type: "reminder"; title: string; due?: string; list?: string }
-  | { type: "icloud_event"; title: string; start: string; end?: string; location?: string };
+  | { type: "icloud_event"; title: string; start: string; end?: string; location?: string }
+  | { type: "alarm"; at?: string; minutes?: number; label?: string }
+  | { type: "camera"; question: string; source: "camera" | "photos" };
+export type ImageInput = { data: string; media_type: "image/jpeg" | "image/png" | "image/webp" };
 export type Turn = { reply: string; emotion: string; cards: Card[]; phone: PhoneAction[] };
 export type Account = { id: number; email: string; label: string; is_primary: number };
 export type Settings = {
@@ -34,7 +38,9 @@ export type Settings = {
 export type Me = { name: string; accounts: Account[]; settings: Settings };
 
 export const getToken = () => SecureStore.getItemAsync(TOKEN_KEY);
-export const clearToken = () => SecureStore.deleteItemAsync(TOKEN_KEY);
+export const clearToken = async () => { Native.clearSession(); await SecureStore.deleteItemAsync(TOKEN_KEY); };
+// Partage la session avec Siri (« Question rapide ») via le trousseau
+export const shareSessionWithSiri = async () => { const t = await getToken(); if (t) Native.setSession(t, API_URL); };
 
 export class AuthError extends Error {}
 
@@ -61,6 +67,7 @@ export const api = {
   renameAccount: (id: number, label: string) => call(`/api/accounts/${id}`, { method: "PATCH", body: JSON.stringify({ label }) }),
   removeAccount: (id: number) => call(`/api/accounts/${id}`, { method: "DELETE" }),
   upcoming: () => call<{ titre: string; debut: string; quand: string; lieu?: string }[]>(`/api/upcoming?hours=48&tz=${encodeURIComponent(timezone())}`),
+  memories: () => call<{ souvenirs: { id: number; text: string; at: string }[]; echanges: { id: number; text: string; at: string }[] }>("/api/memories"),
   urgent: () => call<{ id: string; de: string; sujet: string }[]>(`/api/urgent?tz=${encodeURIComponent(timezone())}`),
   logout: async () => { await call("/api/logout", { method: "POST", body: "{}" }).catch(() => {}); await clearToken(); },
 };
@@ -75,6 +82,7 @@ export async function signInWithGoogle(): Promise<{ name: string } | null> {
   const token = params.get("token");
   if (!token) return null;
   await SecureStore.setItemAsync(TOKEN_KEY, token);
+  Native.setSession(token, API_URL);
   return { name: params.get("name") ?? "" };
 }
 
@@ -133,7 +141,7 @@ async function streamCall(path: string, body: object, onEvent: (e: StreamEvent) 
   }
 }
 
-export const chatStream = (text: string, onEvent: (e: StreamEvent) => void, signal?: AbortSignal) =>
-  streamCall("/api/chat/stream", { text }, onEvent, signal);
+export const chatStream = (text: string, onEvent: (e: StreamEvent) => void, signal?: AbortSignal, image?: ImageInput) =>
+  streamCall("/api/chat/stream", image ? { text, image } : { text }, onEvent, signal);
 export const briefingStream = (kind: "matin" | "soir", onEvent: (e: StreamEvent) => void, signal?: AbortSignal) =>
   streamCall("/api/briefing/stream", { kind }, onEvent, signal);

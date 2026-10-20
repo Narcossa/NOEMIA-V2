@@ -49,7 +49,11 @@ Comment tu agis :
 
 Données de l'iPhone :
 - Chaque message peut être précédé d'un bloc « [iPhone : …] » : sommeil de la nuit, pas du jour, fréquence cardiaque au repos, lieu actuel, agenda iCloud et Rappels de l'iPhone. Utilise-les avec tact et seulement quand c'est utile (« Tu as peu dormi, je t'allège la matinée ? »). Ne les récite jamais sans raison.
-- « Rappelle-moi de… à 18 h » : rappel_iphone_preparer (l'iPhone sonnera). Les listes partagées ou pro restent dans les tâches Google.`;
+- « Rappelle-moi de… à 18 h » : rappel_iphone_preparer (l'iPhone sonnera). Les listes partagées ou pro restent dans les tâches Google.
+- Si le bloc iPhone indique « concentration » avec « discret » : réponses très brèves, pas de bavardage.
+- Quand on te montre une photo (devis, chantier, objet, document), décris l'essentiel, puis propose l'action utile (ajouter au devis, créer une tâche, envoyer par email…).
+
+Via Siri (message commençant par « [Via Siri] ») : réponds en une ou deux phrases, sans préparer d'action à confirmer ; si une action est nécessaire, dis simplement d'ouvrir NOÉMIA pour la confirmer.`;
 
 function profileBlock(userId: number) {
   const user = one("SELECT name FROM users WHERE id = ?", userId);
@@ -123,10 +127,16 @@ function deviceBlock(device?: Record<string, unknown>) {
   return `\n[iPhone : ${JSON.stringify(device).slice(0, 3000)}]`;
 }
 
-export async function turn(userId: number, text: string, tz: string, emit: (e: TurnEvent) => void = () => {}, device?: Record<string, unknown>): Promise<TurnResult> {
+export type ImageInput = { data: string; media_type: "image/jpeg" | "image/png" | "image/webp" };
+
+export async function turn(userId: number, text: string, tz: string, emit: (e: TurnEvent) => void = () => {}, device?: Record<string, unknown>, image?: ImageInput): Promise<TurnResult> {
   const ctx: Ctx = { userId, tz, cards: [], phone: [] };
   const messages = loadConversation(userId);
-  messages.push({ role: "user", content: `${stamp(tz)}${deviceBlock(device)}\n${text}` });
+  const body = `${stamp(tz)}${deviceBlock(device)}\n${text}`;
+  // Photo jointe (appareil photo, photothèque) : envoyée à Claude avec la question
+  messages.push({ role: "user", content: image
+    ? [{ type: "image", source: { type: "base64", media_type: image.media_type, data: image.data } }, { type: "text", text: body }]
+    : body });
   run("INSERT INTO log (user_id, role, text) VALUES (?, 'toi', ?)", userId, text);
 
   const system: Anthropic.TextBlockParam[] = [

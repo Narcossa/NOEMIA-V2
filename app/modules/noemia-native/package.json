@@ -1,0 +1,9 @@
+{
+  "name": "noemia-native",
+  "version": "0.4.0",
+  "description": "Module natif iOS de NOÉMIA : Live Activity, alarmes, IA et reconnaissance sur l'iPhone, Spotlight, Concentration, session Siri",
+  "main": "src/index.ts",
+  "license": "UNLICENSED",
+  "author": "NOEM",
+  "homepage": "https://github.com/Narcossa/NOEMIA-V2"
+}

@@ -18,6 +18,12 @@ export const ProfileIcon = ({ color }: { color: string }) => (
   </Svg>
 );
 
+export const CameraIcon = ({ color }: { color: string }) => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinejoin="round">
+    <Path d="M4 8h3l2-3h6l2 3h3v11H4z" /><Circle cx={12} cy={13} r={3.5} />
+  </Svg>
+);
+
 export type Phase = "repos" | "ecoute" | "reflexion" | "parole";
 
 export function MicButton({ phase, onPress, onLongPress, c }: { phase: Phase; onPress: () => void; onLongPress?: () => void; c: Palette }) {

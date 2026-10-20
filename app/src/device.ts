@@ -7,10 +7,12 @@ import * as Location from "expo-location";
 import {
   isHealthDataAvailable, queryCategorySamples, queryStatisticsForQuantity, requestAuthorization,
 } from "@kingstinct/react-native-healthkit";
+import { Native } from "../modules/noemia-native/src";
 
 export type DeviceContext = {
   sante?: { sommeil_heures?: number; pas_aujourdhui?: number; frequence_cardiaque_repos?: number; energie_active_kcal?: number };
   lieu?: { ville?: string; quartier?: string; rue?: string };
+  concentration?: { active: boolean; discret: boolean };
   icloud?: { evenements: { titre: string; debut: string; lieu?: string }[]; rappels: { titre: string; echeance?: string; liste?: string }[] };
 };
 
@@ -113,7 +115,8 @@ let cache: { at: number; ctx: DeviceContext } | null = null;
 export async function deviceContext(): Promise<DeviceContext> {
   if (cache && Date.now() - cache.at < 120_000) return cache.ctx;
   const [sante, lieu, ic] = await Promise.all([health(), place(), icloud()]);
-  const ctx: DeviceContext = { sante, lieu, icloud: ic };
+  const focus = Native.focusState();
+  const ctx: DeviceContext = { sante, lieu, icloud: ic, concentration: focus.actif ? { active: true, discret: focus.discret } : undefined };
   cache = { at: Date.now(), ctx };
   return ctx;
 }

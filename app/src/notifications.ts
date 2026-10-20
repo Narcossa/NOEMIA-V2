@@ -17,6 +17,33 @@ export const DEFAULTS: Required<Pick<Settings, "briefing" | "bilan" | "reminderM
 const TASK = "noemia-arriere-plan";
 const SEEN_KEY = "noemia.urgent-vus";
 
+// Boutons dans les notifications : « Fait », « Reporter d'une heure », « Lire »…
+export async function setupCategories() {
+  await Notifications.setNotificationCategoryAsync("rappel", [
+    { identifier: "fait", buttonTitle: "Fait", options: { opensAppToForeground: false } },
+    { identifier: "reporter", buttonTitle: "Reporter d'une heure", options: { opensAppToForeground: false } },
+  ]);
+  await Notifications.setNotificationCategoryAsync("email", [
+    { identifier: "lire", buttonTitle: "Lire avec NOÉMIA", options: { opensAppToForeground: true } },
+    { identifier: "reporter", buttonTitle: "Plus tard", options: { opensAppToForeground: false } },
+  ]);
+  await Notifications.setNotificationCategoryAsync("briefing", [
+    { identifier: "ecouter", buttonTitle: "Écouter", options: { opensAppToForeground: true } },
+    { identifier: "reporter", buttonTitle: "Dans une heure", options: { opensAppToForeground: false } },
+  ]);
+}
+
+// « Reporter » : la même notification revient une heure plus tard
+Notifications.addNotificationResponseReceivedListener(async r => {
+  if (r.actionIdentifier !== "reporter") return;
+  const c = r.notification.request.content;
+  await Notifications.scheduleNotificationAsync({
+    content: { title: c.title ?? "NOÉMIA", body: c.body ?? "", data: c.data ?? {}, categoryIdentifier: (c as any).categoryIdentifier },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 3600 },
+  });
+  await Notifications.dismissNotificationAsync(r.notification.request.identifier).catch(() => {});
+});
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
 });
@@ -27,6 +54,7 @@ const inQuiet = (d: Date, q = DEFAULTS.quiet) => {
 };
 
 export async function askNotificationPermission() {
+  await setupCategories().catch(() => {});
   const r = await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowSound: true, allowBadge: false } });
   return r.granted;
 }
@@ -39,7 +67,7 @@ export async function reschedule(settings: Settings = {}) {
   const daily = async (cfg: { enabled: boolean; hour: number; minute: number }, title: string, body: string, action: string) => {
     if (!cfg.enabled) return;
     await Notifications.scheduleNotificationAsync({
-      content: { title, body, data: { action } },
+      content: { title, body, data: { action }, categoryIdentifier: "briefing" },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: cfg.hour, minute: cfg.minute },
     });
   };
@@ -53,7 +81,7 @@ export async function reschedule(settings: Settings = {}) {
       const at = new Date(new Date(e.debut).getTime() - s.reminderMinutes * 60_000);
       if (at.getTime() < Date.now() + 30_000 || inQuiet(at, s.quiet)) continue;
       await Notifications.scheduleNotificationAsync({
-        content: { title: e.titre, body: `Dans ${s.reminderMinutes} minutes${e.lieu ? " · " + e.lieu : ""}`, data: { action: "rappel" } },
+        content: { title: e.titre, body: `Dans ${s.reminderMinutes} minutes${e.lieu ? " · " + e.lieu : ""}`, data: { action: "rappel" }, categoryIdentifier: "rappel" },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at },
       });
     }
@@ -68,7 +96,7 @@ async function checkUrgent() {
     if (inQuiet(new Date())) continue;
     const from = m.de.replace(/<.*>/, "").replace(/"/g, "").trim();
     await Notifications.scheduleNotificationAsync({
-      content: { title: `Email important de ${from}`, body: m.sujet, data: { action: "email" } },
+      content: { title: `Email important de ${from}`, body: m.sujet, data: { action: "email" }, categoryIdentifier: "email" },
       trigger: null,
     });
   }

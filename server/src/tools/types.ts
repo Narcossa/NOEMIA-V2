@@ -18,7 +18,9 @@ export type PhoneAction =
   | { type: "shortcut"; name: string; input?: string }
   | { type: "maps"; destination: string }
   | { type: "reminder"; title: string; due?: string; list?: string }
-  | { type: "icloud_event"; title: string; start: string; end?: string; location?: string };
+  | { type: "icloud_event"; title: string; start: string; end?: string; location?: string }
+  | { type: "alarm"; at?: string; minutes?: number; label?: string }
+  | { type: "camera"; question: string; source: "camera" | "photos" };
 
 export type Ctx = {
   userId: number;

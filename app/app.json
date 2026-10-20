@@ -3,7 +3,7 @@
     "name": "NOÉMIA",
     "slug": "noemia",
     "scheme": "noemia",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,7 +17,9 @@
           "shortcuts",
           "maps"
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSSupportsLiveActivities": true,
+        "NSAlarmKitUsageDescription": "NOÉMIA règle tes alarmes et minuteurs, avec le compte à rebours dans la Dynamic Island."
       }
     },
     "android": {
@@ -78,7 +80,15 @@
           "locationWhenInUsePermission": "NOÉMIA utilise ta position pour les trajets et le contexte de tes demandes."
         }
       ],
-      "./plugins/withAppIntents"
+      "./plugins/withAppIntents",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "NOÉMIA regarde ce que tu lui montres : un objet, un devis, un chantier.",
+          "photosPermission": "NOÉMIA analyse les photos que tu choisis de lui montrer.",
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }
